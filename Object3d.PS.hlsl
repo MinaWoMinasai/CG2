@@ -1,6 +1,7 @@
 #include "Object3d.hlsli"
 
-struct Material {
+struct Material
+{
     
     float4 color;
     

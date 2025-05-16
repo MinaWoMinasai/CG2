@@ -75,43 +75,6 @@ void Log(std::ostream& os, const std::string& message) {
 	OutputDebugStringA(message.c_str());
 }
 
-const int kTetraCount = 50;
-Transform tetraTransforms[kTetraCount];
-
-void InitializeTetrahedrons() {
-	for (int i = 0; i < kTetraCount; i++) {
-
-		float randamScale = Rand(0.5f, 2.0f);
-
-		tetraTransforms[i].scale = { randamScale, randamScale, randamScale };
-		tetraTransforms[i].rotate = { 0.0f, 0.0f, 0.0f };
-		tetraTransforms[i].translate = { Rand(-10.0f, 10.0f), Rand(-10.0f, 10.0f), Rand(10.0f, 150.0f) };
-	}
-}
-
-void UpdateTetrahedrons() {
-	for (int i = 0; i < kTetraCount; i++) {
-		
-		float speed = Rand(0.2f, 0.8f);
-		float rotateSpeed = Rand(0.01f, 0.05f);
-
-
-		// 自転
-		tetraTransforms[i].rotate.x += rotateSpeed;
-		tetraTransforms[i].rotate.y += rotateSpeed;
-		tetraTransforms[i].rotate.z += rotateSpeed;
-
-		// 前進（Zマイナス方向に）
-		tetraTransforms[i].translate.z -= speed;
-
-		// 画面外でリセット
-		if (tetraTransforms[i].translate.z < -20.0f) {
-			tetraTransforms[i].translate = { Rand(-10.0f, 10.0f), Rand(-10.0f, 10.0f), Rand(100.0f, 150.0f) };
-			tetraTransforms[i].rotate = { 0.0f, 0.0f, 0.0f };
-		}
-	}
-}
-
 ID3D12Resource* CreateBufferResource(ID3D12Device* device, size_t sizeInBytes) {
 
 	// 頂点リソース用のヒープの設定
@@ -384,6 +347,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 	//// 標準のメッセージ処置を行う
 	return DefWindowProc(hwnd, msg, wparam, lparam);
 }
+
+// 時間を取得する
+auto startTime = std::chrono::steady_clock::now();
 
 // Windowsアプリでのエントリーポイント(main関数)
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
@@ -773,7 +739,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		IID_PPV_ARGS(&graphicsPipelineState));
 	assert(SUCCEEDED(hr));
 
-	const uint32_t kSubdivision = 16; // 分割数
+	// 三角錐の数
+	const int kTetraCount = 50;
+	Actor tetraTransforms[kTetraCount];
 
 	ID3D12Resource* vertexResource = CreateBufferResource(device, sizeof(VertexData) * 3 * 4 * kTetraCount);
 
@@ -791,7 +759,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	VertexData* vertexData = nullptr;
 	// 書き込むためのアドレスを取得
 	vertexResource->Map(0, nullptr, reinterpret_cast<void**>(&vertexData));
-	
+
 	// 元のローカル座標
 	float s = 0.577f;
 	Vector4 v0 = { 0.0f, 1.0f,  0.0f };                          // 頂点A（上）
@@ -842,8 +810,16 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		vertexData[start + 11] = { v2, uv1 };
 	}
 
-	InitializeTetrahedrons();
+	for (int i = 0; i < kTetraCount; i++) {
 
+		float randamScale = Rand(0.5f, 2.0f);
+
+		tetraTransforms[i].transform.scale = { randamScale, randamScale, randamScale };
+		tetraTransforms[i].transform.rotate = { Rand (-10.0f, 10.0f), Rand(-10.0f, 10.0f), Rand(-10.0f, 10.0f) };
+		tetraTransforms[i].transform.translate = { Rand(-10.0f, 10.0f), Rand(-10.0f, 10.0f), Rand(10.0f, 150.0f) };
+		tetraTransforms[i].speed = Rand(0.2f, 1.0f);
+	}
+	
 	// マテリアル用のリソースを作る。今回はcolor1つ分のサイズを用意する
 	ID3D12Resource* materialResource = CreateBufferResource(device, sizeof(Vector4));
 	// マテリアルにデータを書き込む
@@ -1004,19 +980,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			ImGui::DragFloat3("rotate", &transform.rotate.x, 0.1f);
 			ImGui::DragFloat3("translate", &transform.translate.x, 0.1f);
 
-			// スライダーで変えられるようにする
-			//ImGui::SliderFloat3("scale", &transform.scale.x, 0.0f, 3.0f);
-			//ImGui::SliderFloat3("rotate", &transform.rotate.x, 0.0f, 100.0f);
-			//ImGui::SliderFloat3("translate", &transform.translate.x, 0.0f, 3.0f);
-
 			// 三角形の色を変えられるようにする
 			ImGui::ColorEdit4("Triangle color", &materialData->x);
-
-			// スプライトもスライダーで変えられるようにする
-			ImGui::SliderFloat3("scaleSprite", &transformSprite.scale.x, 0.0f, 3.0f);
-			ImGui::SliderFloat3("rotateSprite", &transformSprite.rotate.x, 0.0f, 100.0f);
-			ImGui::SliderFloat3("translateSprite", &transformSprite.translate.x, 0.0f, 1280.0f);
-
+			
+			// テクスチャを変えられるようにする 
 			ImGui::Checkbox("useMonsterBall", &useMonsterBall);
 
 			// 開発用UIの処理。実際に開発用のUIを出す場合はここをゲーム固有の処理に置き換える
@@ -1024,16 +991,43 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 			// ImGuiの内部コマンドを生成する
 			ImGui::Render();
-			
+
+			auto now = std::chrono::steady_clock::now();
+			float time = std::chrono::duration<float>(now - startTime).count();
+
+			// 色を時間に応じて変化
+			float r = 0.5f + 0.5f * sinf(time * 0.5f);
+			float g = 0.5f + 0.5f * sinf(time * 0.5f + 2.0f);
+			float b = 0.5f + 0.5f * sinf(time * 0.5f + 4.0f);
+			*materialData = Vector4(r, g, b, 1.0f);
+
 			// 三角錐の更新
-			UpdateTetrahedrons();
+			for (int i = 0; i < kTetraCount; i++) {
+
+				float rotateSpeed = Rand(0.01f, 0.05f);
+
+				// 自転
+				tetraTransforms[i].transform.rotate.x += rotateSpeed;
+				tetraTransforms[i].transform.rotate.y += rotateSpeed;
+				tetraTransforms[i].transform.rotate.z += rotateSpeed;
+
+				// 前進（Zマイナス方向に）
+				tetraTransforms[i].transform.translate.z -= tetraTransforms[i].speed;
+
+				// 画面外でリセット
+				if (tetraTransforms[i].transform.translate.z < -20.0f) {
+					tetraTransforms[i].transform.translate = { Rand(-10.0f, 10.0f), Rand(-10.0f, 10.0f), Rand(100.0f, 150.0f) };
+					tetraTransforms[i].transform.rotate = { 0.0f, 0.0f, 0.0f };
+				}
+			}
+
+			// 三角錐の頂点データを更新
 			for (int i = 0; i < kTetraCount; i++) {
 				Matrix4x4 worldMatrix = MakeAffineMatrix(
-					tetraTransforms[i].scale,
-					
-					tetraTransforms[i].rotate,
-					tetraTransforms[i].translate
-					
+					tetraTransforms[i].transform.scale,
+					tetraTransforms[i].transform.rotate,
+					tetraTransforms[i].transform.translate
+
 				);
 
 				// 三角錐のローカル頂点（v0〜v3）をワールド座標へ変換
@@ -1058,20 +1052,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 				vertexData[start + 11] = { tv2, uv1 };
 			}
 
-			// Sprite用のWorldViewProjectionMatrixを作る
-			Matrix4x4 worldMatrixSprite = MakeAffineMatrix(transformSprite.scale, transformSprite.rotate, transformSprite.translate);
-			Matrix4x4 viewMatrixSprite = MakeIdentity4x4();
-			Matrix4x4 projectionMatrixSprite = MakeOrthographicMatrix(0.0f, 0.0f, float(kClientWidth), float(kClientHeight), 0.0f, 100.0f);
-			Matrix4x4 worldViewProjectionMatrixSprite = Multiply(worldMatrixSprite, Multiply(viewMatrixSprite, projectionMatrixSprite));
-			*transformationMatrixDataSprite = worldViewProjectionMatrixSprite;
-
 			Matrix4x4 worldMatrix = MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
 			Matrix4x4 cameraMatrix = MakeAffineMatrix(cameraTransform.scale, cameraTransform.rotate, cameraTransform.translate);
 			Matrix4x4 viewMatrix = Inverse(cameraMatrix);
 			Matrix4x4 projectionMatrix = MakePerspectiveForMatrix(0.45f, float(kClientWidth) / float(kClientHeight), 0.1f, 100.0f);
 			Matrix4x4 worldViewProjectionMatrix = Multiply(worldMatrix, Multiply(viewMatrix, projectionMatrix));
 			*wvpData = worldViewProjectionMatrix;
-		
+
 			// これから書き込むバックバッファのインデックスを取得
 			UINT backBufferIndex = swapChain->GetCurrentBackBufferIndex();
 			// TransitionBarrierの設定

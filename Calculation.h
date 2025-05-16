@@ -27,6 +27,11 @@ struct Transform {
 	Vector3 translate;
 };
 
+struct Actor {
+	Transform transform;
+	float speed;
+};
+
 // 4x4の行列
 struct Matrix4x4 {
 	float m[4][4];
@@ -43,60 +48,10 @@ struct Sphere {
 	float radius; // 半径
 };
 
-//float Rand(float min, float max) {
-//	static std::mt19937 rng(std::random_device{}()); // 一度だけ初期化
-//	std::uniform_real_distribution<float> dist(min, max);
-//	return dist(rng);
-//}
-
 const float pi = 3.14159265f;
-//
-//struct Tetrahedron {
-//	Vector3 position;     // 現在位置
-//	Vector3 velocity;     // 移動速度（速度ベクトル）
-//	float rotation;       // 回転角
-//	float scale;          // 拡大率
-//	bool active;          // 表示状態（非表示 or 動作中）
-//	
-//	void Reset() {
-//		position = { 640.0f, 352.0f, 0.0f }; // 中心に再配置
-//		float angle = Rand(0.0f, 2.0f * pi); // ランダムな方向
-//		float speed = Rand(200.0f, 500.0f);  // ランダムな速さ
-//
-//		velocity = {
-//			cosf(angle) * speed,
-//			sinf(angle) * speed,
-//			0.0f
-//		};
-//
-//		rotation = Rand(0.0f, 2.0f * pi);
-//		scale = Rand(0.5f, 1.5f);
-//		active = true;
-//	}
-//
-//	void Update(float dt) {
-//		if (!active) return;
-//
-//		// 移動
-//		Add(position, Multiply(dt,velocity));
-//
-//		// 回転（オプション）
-//		rotation += 1.0f * dt;
-//
-//		// 画面外判定（例：1280x704の外に出たか）
-//		if (position.x < -300 || position.x > 1580 ||
-//			position.y < -300 || position.y > 1004) {
-//			Reset();
-//		}
-//	}
-//	
-//};
 
 // 加算
 Vector3 Add(const Vector3& v1, const Vector3& v2);
-
-// 加算
-//Vector4 Add(const Vector3& v1, const Vector3& v2);
 
 // 減算
 Vector3 Subtract(const Vector3& v1, const Vector3& v2);
@@ -157,5 +112,3 @@ Matrix4x4 MakePerspectiveForMatrix(float fovY, float aspectRatio, float nearClip
 Matrix4x4 MakeOrthographicMatrix(float left, float top, float right, float bottom, float nearClip, float farClip);
 // ビューポート変換行列
 Matrix4x4 MakeViewportMatrix(float left, float top, float width, float height, float minDepth, float maxDepth);
-
-

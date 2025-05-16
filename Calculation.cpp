@@ -473,7 +473,7 @@ Matrix4x4 MakeAffineMatrix(const Vector3& scale, const Vector3& rotate, const Ve
 	//Matrix4x4 rotateZMatrix = MakeRotateZMatrix(rotate.z);
 
 	//return Multiply(Multiply(scaleMatrix, Multiply(rotateXMatrix, Multiply(rotateYMatrix, rotateZMatrix))), translateMatrix);
-	
+
 		//Matrix4x4 scaleMatrix = MakeScaleMatrix(scale);
 		//Matrix4x4 rotateXMatrix = MakeRotateXMatrix(rotate.x);
 		//Matrix4x4 rotateYMatrix = MakeRotateYMatrix(rotate.y);
@@ -487,23 +487,23 @@ Matrix4x4 MakeAffineMatrix(const Vector3& scale, const Vector3& rotate, const Ve
 
 		//return worldMatrix;
 
-		Matrix4x4 result = { 0 };
-		Matrix4x4 rotateXYZMatrix = Multiply(MakeRotateXMatrix(rotate.x), Multiply(MakeRotateYMatrix(rotate.y), MakeRotateZMatrix(rotate.z)));
-		result.m[0][0] = scale.x * rotateXYZMatrix.m[0][0];
-		result.m[0][1] = scale.x * rotateXYZMatrix.m[0][1];
-		result.m[0][2] = scale.x * rotateXYZMatrix.m[0][2];
-		result.m[1][0] = scale.y * rotateXYZMatrix.m[1][0];
-		result.m[1][1] = scale.y * rotateXYZMatrix.m[1][1];
-		result.m[1][2] = scale.y * rotateXYZMatrix.m[1][2];
-		result.m[2][0] = scale.z * rotateXYZMatrix.m[2][0];
-		result.m[2][1] = scale.z * rotateXYZMatrix.m[2][1];
-		result.m[2][2] = scale.z * rotateXYZMatrix.m[2][2];
-		result.m[3][0] = translate.x;
-		result.m[3][1] = translate.y;
-		result.m[3][2] = translate.z;
-		result.m[3][3] = 1.0f;
-		return result;
-	
+	Matrix4x4 result = { 0 };
+	Matrix4x4 rotateXYZMatrix = Multiply(MakeRotateXMatrix(rotate.x), Multiply(MakeRotateYMatrix(rotate.y), MakeRotateZMatrix(rotate.z)));
+	result.m[0][0] = scale.x * rotateXYZMatrix.m[0][0];
+	result.m[0][1] = scale.x * rotateXYZMatrix.m[0][1];
+	result.m[0][2] = scale.x * rotateXYZMatrix.m[0][2];
+	result.m[1][0] = scale.y * rotateXYZMatrix.m[1][0];
+	result.m[1][1] = scale.y * rotateXYZMatrix.m[1][1];
+	result.m[1][2] = scale.y * rotateXYZMatrix.m[1][2];
+	result.m[2][0] = scale.z * rotateXYZMatrix.m[2][0];
+	result.m[2][1] = scale.z * rotateXYZMatrix.m[2][1];
+	result.m[2][2] = scale.z * rotateXYZMatrix.m[2][2];
+	result.m[3][0] = translate.x;
+	result.m[3][1] = translate.y;
+	result.m[3][2] = translate.z;
+	result.m[3][3] = 1.0f;
+	return result;
+
 }
 
 Matrix4x4 MakePerspectiveForMatrix(float fovY, float aspectRatio, float nearClip, float farClip) {
@@ -585,31 +585,3 @@ Matrix4x4 MakeViewportMatrix(float left, float top, float width, float height, f
 
 	return result;
 }
-//
-//const int kNumTetrahedrons = 100;
-//std::vector<Tetrahedron> tetraList(kNumTetrahedrons);
-//
-//void InitAll() {
-//	for (auto& t : tetraList) {
-//		t.Reset(); // 初期化
-//	}
-//}
-//
-//void UpdateAll(float dt) {
-//	for (auto& t : tetraList) {
-//		t.Update(dt);
-//	}
-//}
-//
-//void DrawAll() {
-//	for (const auto& t : tetraList) {
-//		if (!t.active) continue;
-//
-//		Matrix4x4 matWorld =
-//			MakeScaleMatrix(t.scale) *
-//			MakeRotateZMatrix(t.rotation) *
-//			MakeTranslateMatrix(t.position);
-//
-//		// Set matrix to shader and draw tetrahedron
-//	}
-//}
