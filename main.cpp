@@ -85,7 +85,7 @@ void InitializeTetrahedrons() {
 
 		tetraTransforms[i].scale = { randamScale, randamScale, randamScale };
 		tetraTransforms[i].rotate = { 0.0f, 0.0f, 0.0f };
-		tetraTransforms[i].translate = { Rand(-10.0f, 10.0f), Rand(-10.0f, 10.0f), Rand(10.0f, 80.0f) };
+		tetraTransforms[i].translate = { Rand(-10.0f, 10.0f), Rand(-10.0f, 10.0f), Rand(10.0f, 150.0f) };
 	}
 }
 
@@ -106,7 +106,7 @@ void UpdateTetrahedrons() {
 
 		// 画面外でリセット
 		if (tetraTransforms[i].translate.z < -20.0f) {
-			tetraTransforms[i].translate = { Rand(-10.0f, 10.0f), Rand(-10.0f, 10.0f), Rand(40.0f, 80.0f) };
+			tetraTransforms[i].translate = { Rand(-10.0f, 10.0f), Rand(-10.0f, 10.0f), Rand(100.0f, 150.0f) };
 			tetraTransforms[i].rotate = { 0.0f, 0.0f, 0.0f };
 		}
 	}
@@ -791,64 +791,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	VertexData* vertexData = nullptr;
 	// 書き込むためのアドレスを取得
 	vertexResource->Map(0, nullptr, reinterpret_cast<void**>(&vertexData));
-	//// 分割数
-	////const uint32_t kSubdivision = 16;
-	//const float kLonEvery = 2.0f * float(M_PI) / float(kSubdivision);
-	//const float kLatEvery = float(M_PI) / float(kSubdivision);
-
-	//// 頂点データの書き込み
-	//for (uint32_t latIndex = 0; latIndex < kSubdivision; ++latIndex) {
-	//	// 各バンドの南端緯度と北端緯度
-	//	float lat = -0.5f * float(M_PI) + kLatEvery * float(latIndex);
-	//	float latN = lat + kLatEvery;
-	//	// sin/cos を一度だけ計算
-	//	float cosLat = cosf(lat);
-	//	float sinLat = sinf(lat);
-	//	float cosLatN = cosf(latN);
-	//	float sinLatN = sinf(latN);
-
-	//	for (uint32_t lonIndex = 0; lonIndex < kSubdivision; ++lonIndex) {
-	//		float lon = kLonEvery * float(lonIndex);
-	//		float lonN = lon + kLonEvery;
-	//		float cosLon = cosf(lon);
-	//		float sinLon = sinf(lon);
-	//		float cosLonN = cosf(lonN);
-	//		float sinLonN = sinf(lonN);
-
-	//		// テクスチャ座標
-	//		float u = float(lonIndex) / float(kSubdivision);
-	//		float uN = float(lonIndex + 1) / float(kSubdivision);
-	//		float v = 1.0f - float(latIndex) / float(kSubdivision);
-	//		float vN = 1.0f - float(latIndex + 1) / float(kSubdivision);
-
-	//		// 6頂点分のベースオフセット
-	//		uint32_t base = (latIndex * kSubdivision + lonIndex) * 6;
-
-	//		// 頂点位置を構築
-	//		// BL (Bottom-Left)
-	//		vertexData[base + 0].position = { cosLat * cosLon,  sinLat,  cosLat * sinLon, 1.0f };
-	//		vertexData[base + 0].texcoord = { u,  v };
-	//		// TL (Top-Left)
-	//		vertexData[base + 1].position = { cosLatN * cosLon,  sinLatN, cosLatN * sinLon, 1.0f };
-	//		vertexData[base + 1].texcoord = { u,  vN };
-	//		// BR (Bottom-Right)
-	//		vertexData[base + 2].position = { cosLat * cosLonN, sinLat,  cosLat * sinLonN, 1.0f };
-	//		vertexData[base + 2].texcoord = { uN, v };
-	//		// TR (Top-Right)
-	//		vertexData[base + 3].position = { cosLatN * cosLonN, sinLatN, cosLatN * sinLonN, 1.0f };
-	//		vertexData[base + 3].texcoord = { uN, vN };
-
-	//		// 三角形1 (BL, TL, BR)
-	//		// → 0,1,2
-	//		// 三角形2 (BR, TL, TR)  ※ワインディングを揃える
-	//		// → 2,1,3
-	//		vertexData[base + 4] = vertexData[base + 2]; // BR
-	//		vertexData[base + 5] = vertexData[base + 1]; // TL
-	//		//vertexData[base + 6] = vertexData[base + 3]; // TR
-	//		// （もしバッファが 6 連続でしか取れないなら、この部分だけ書き換えて 6 要素に収めてください）
-	//	}
-	//}
-
+	
 	// 元のローカル座標
 	float s = 0.577f;
 	Vector4 v0 = { 0.0f, 1.0f,  0.0f };                          // 頂点A（上）
@@ -877,8 +820,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	// 面1（ABC）
 	for (int i = 0; i < kTetraCount; i++) {
 
-		float randam = Rand(-5.0f, 5.0f);
-
 		int start = i * 12;
 
 		vertexData[start + 0] = { v0, uv0 };
@@ -902,107 +843,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	}
 
 	InitializeTetrahedrons();
-
-	//const float kLatEvery = pi / kSubdivision;       // 緯度（πをkSubdivisionで割る）
-	//const float kLonEvery = 2.0f * pi / kSubdivision; // 経度（2πをkSubdivisionで割る）
-
-	//uint32_t verticesNum = 0;
-
-	//for (uint32_t latIndex = 0; latIndex < kSubdivision; ++latIndex) {
-	//	float lat = -pi / 2.0f + kLatEvery * latIndex;
-	//	float nextLat = lat + kLatEvery;
-
-	//	for (uint32_t lonIndex = 0; lonIndex < kSubdivision; ++lonIndex) {
-	//		float lon = lonIndex * kLonEvery; // φ
-	//		float nextLon = lon + kLonEvery;
-
-	//		uint32_t startIndex = (latIndex * kSubdivision + lonIndex) * 6;
-
-	//		// a
-	//		vertexData[startIndex].position.x = std::cos(lat) * std::cos(lon);
-	//		vertexData[startIndex].position.y = std::sin(lat);
-	//		vertexData[startIndex].position.z = std::cos(lat) * std::sin(lon);
-	//		vertexData[startIndex].position.w = 1.0f;
-	//		vertexData[startIndex].texcoord.x = float(lonIndex) / float(kSubdivision);
-	//		vertexData[startIndex].texcoord.y = 1.0f - float(latIndex) / float(kSubdivision);
-
-	//		// b
-	//		vertexData[++startIndex].position.x = std::cos(nextLat) * std::cos(lon);
-	//		vertexData[startIndex].position.y = std::sin(nextLat);
-	//		vertexData[startIndex].position.z = std::cos(nextLat) * std::sin(lon);
-	//		vertexData[startIndex].position.w = 1.0f;
-	//		vertexData[startIndex].texcoord.x = float(lonIndex) / float(kSubdivision);
-	//		vertexData[startIndex].texcoord.y = 1.0f - float(latIndex) / float(kSubdivision);
-
-	//		// c
-	//		vertexData[++startIndex].position.x = std::cos(lat) * std::cos(nextLon);
-	//		vertexData[startIndex].position.y = std::sin(lat);
-	//		vertexData[startIndex].position.z = std::cos(lat) * std::sin(nextLon);
-	//		vertexData[startIndex].position.w = 1.0f;
-	//		vertexData[startIndex].texcoord.x = float(lonIndex) / float(kSubdivision);
-	//		vertexData[startIndex].texcoord.y = 1.0f - float(latIndex) / float(kSubdivision);
-
-	//		// c
-	//		vertexData[++startIndex].position.x = std::cos(lat) * std::cos(nextLon);
-	//		vertexData[startIndex].position.y = std::sin(lat);
-	//		vertexData[startIndex].position.z = std::cos(lat) * std::sin(nextLon);
-	//		vertexData[startIndex].position.w = 1.0f;
-	//		vertexData[startIndex].texcoord.x = float(lonIndex) / float(kSubdivision);
-	//		vertexData[startIndex].texcoord.y = 1.0f - float(latIndex) / float(kSubdivision);
-
-	//		// b
-	//		vertexData[++startIndex].position.x = std::cos(nextLat) * std::cos(lon);
-	//		vertexData[startIndex].position.y = std::sin(nextLat);
-	//		vertexData[startIndex].position.z = std::cos(nextLat) * std::sin(lon);
-	//		vertexData[startIndex].position.w = 1.0f;
-	//		vertexData[startIndex].texcoord.x = float(lonIndex) / float(kSubdivision);
-	//		vertexData[startIndex].texcoord.y = 1.0f - float(latIndex) / float(kSubdivision);
-
-	//		// d
-	//		vertexData[++startIndex].position.x = std::cos(nextLat) * std::cos(nextLon);
-	//		vertexData[startIndex].position.y = std::sin(nextLat);
-	//		vertexData[startIndex].position.z = std::cos(nextLat) * std::sin(nextLon);
-	//		vertexData[startIndex].position.w = 1.0f;
-	//		vertexData[startIndex].texcoord.x = float(lonIndex) / float(kSubdivision);
-	//		vertexData[startIndex].texcoord.y = 1.0f - float(latIndex) / float(kSubdivision);
-
-	//	}
-	//}
-
-	//std::vector<Vector4> test;
-	//for (uint32_t i = 0; i < kSubdivision * kSubdivision * 6; i++) {
-	//	test.push_back(vertexData[i].position);
-	//}
-
-	// Sprite用の頂点リソースを作る
-	ID3D12Resource* vertexResourceSprite = CreateBufferResource(device, sizeof(VertexData) * 6);
-
-	// 頂点バッファビューを作成する
-	D3D12_VERTEX_BUFFER_VIEW vertexBufferViewSprite{};
-	// リソースの先端のアドレスから使う
-	vertexBufferViewSprite.BufferLocation = vertexResourceSprite->GetGPUVirtualAddress();
-	// 使用するリソースのサイズは頂点6つ分のサイズ
-	vertexBufferViewSprite.SizeInBytes = sizeof(VertexData) * 6;
-	// 1頂点あたりのサイズ
-	vertexBufferViewSprite.StrideInBytes = sizeof(VertexData);
-
-	VertexData* vertexDataSprite = nullptr;
-	vertexResourceSprite->Map(0, nullptr, reinterpret_cast<void**>(&vertexDataSprite));
-
-	// 一枚目の三角形
-	vertexDataSprite[0].position = { 0.0f, 360.0f, 0.0f, 1.0f };// 左下
-	vertexDataSprite[0].texcoord = { 0.0f, 1.0f };
-	vertexDataSprite[1].position = { 0.0f, 0.0f, 0.0f, 1.0f };// 左上
-	vertexDataSprite[1].texcoord = { 0.0f, 0.0f };
-	vertexDataSprite[2].position = { 640.0f, 360.0f, 0.0f, 1.0f };// 右下
-	vertexDataSprite[2].texcoord = { 1.0f, 1.0f };
-	// 二枚目の三角形
-	vertexDataSprite[3].position = { 0.0f, 0.0f, 0.0f, 1.0f };// 左上
-	vertexDataSprite[3].texcoord = { 0.0f, 0.0f };
-	vertexDataSprite[4].position = { 640.0f, 0.0f, 0.0f, 1.0f };// 右上
-	vertexDataSprite[4].texcoord = { 1.0f, 0.0f };
-	vertexDataSprite[5].position = { 640.0f, 360.0f, 0.0f, 1.0f };// 右下
-	vertexDataSprite[5].texcoord = { 1.0f, 1.0f };
 
 	// マテリアル用のリソースを作る。今回はcolor1つ分のサイズを用意する
 	ID3D12Resource* materialResource = CreateBufferResource(device, sizeof(Vector4));
@@ -1185,11 +1025,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			// ImGuiの内部コマンドを生成する
 			ImGui::Render();
 			
-			//transform.rotate.x += 0.03f;
-			//transform.rotate.y += 0.03f;
-			//transform.rotate.z += 0.03f;
-			//transform.translate.z -= 0.1f;
-
 			// 三角錐の更新
 			UpdateTetrahedrons();
 			for (int i = 0; i < kTetraCount; i++) {
@@ -1284,14 +1119,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			// 描画!(DrawCall/ドローコール) 。3頂点で1つのインスタンス。 インスタンスについては今度
 			commandList->DrawInstanced(3 * 4 * kTetraCount, 1, 0, 0);
 
-			commandList->IASetVertexBuffers(0, 1, &vertexBufferViewSprite); //VBVを設定
-			commandList->SetGraphicsRootConstantBufferView(1, transformationMatrixResourceSprite->GetGPUVirtualAddress());
-			commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU);
-
-			// 描画!(DrawCall/ドローコール) 。3頂点で1つのインスタンス。 インスタンスについては今度
-			//commandList->DrawInstanced(6, 1, 0, 0);
-
-
 			// 画面に描く処理はすべて終わり、画面に移すので、状態を維持
 			// 今回はRenderTargetからRresentにする
 			barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
@@ -1360,7 +1187,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	vertexResource->Release();
 	materialResource->Release();
 	wvpResource->Release();
-	vertexResourceSprite->Release();
 	transformationMatrixResourceSprite->Release();
 	textureResource->Release();
 	textureResource2->Release();
