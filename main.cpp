@@ -25,6 +25,16 @@
 //#pragma comment(lib, "DirectXTex.lib")
 #include "externals/DirectXTex/d3dx12.h"
 #include <vector>
+#define _USE_MATH_DEFINES
+#include "math.h"
+#include "Calculation.h"
+#include <random>
+
+float Rand(float min, float max) {
+	static std::mt19937 rng(std::random_device{}()); // 一度だけ初期化
+	std::uniform_real_distribution<float> dist(min, max);
+	return dist(rng);
+}
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -65,76 +75,42 @@ void Log(std::ostream& os, const std::string& message) {
 	OutputDebugStringA(message.c_str());
 }
 
-struct Vector2 {
-	float x;
-	float y;
-};
+const int kTetraCount = 50;
+Transform tetraTransforms[kTetraCount];
 
-struct Vector3 {
-	float x;
-	float y;
-	float z;
-};
+void InitializeTetrahedrons() {
+	for (int i = 0; i < kTetraCount; i++) {
 
-struct Vector4 {
-	float w;
-	float x;
-	float y;
-	float z;
-};
+		float randamScale = Rand(0.5f, 2.0f);
 
-struct Transform {
-	Vector3 scale;
-	Vector3 rotate;
-	Vector3 translate;
-};
+		tetraTransforms[i].scale = { randamScale, randamScale, randamScale };
+		tetraTransforms[i].rotate = { 0.0f, 0.0f, 0.0f };
+		tetraTransforms[i].translate = { Rand(-10.0f, 10.0f), Rand(-10.0f, 10.0f), Rand(10.0f, 80.0f) };
+	}
+}
 
-// 4x4の行列
-struct Matrix4x4 {
-	float m[4][4];
-};
+void UpdateTetrahedrons() {
+	for (int i = 0; i < kTetraCount; i++) {
+		
+		float speed = Rand(0.2f, 0.8f);
+		float rotateSpeed = Rand(0.01f, 0.05f);
 
-struct VertexData {
-	Vector4 position;
-	Vector2 texcoord;
-};
 
-// 行列の加算
-Matrix4x4 Add(const Matrix4x4& m1, const Matrix4x4& m2);
-// 行列の減産
-Matrix4x4 Subtract(const Matrix4x4& m1, const Matrix4x4& m2);
-// 行列の積
-Matrix4x4 Multiply(const Matrix4x4& m1, const Matrix4x4& m2);
-// 逆行列
-Matrix4x4 Inverse(const Matrix4x4& m);
-// 転置行列
-Matrix4x4 Transpose(const Matrix4x4& m);
-// 単位行列の作成
-Matrix4x4 MakeIdentity4x4();
+		// 自転
+		tetraTransforms[i].rotate.x += rotateSpeed;
+		tetraTransforms[i].rotate.y += rotateSpeed;
+		tetraTransforms[i].rotate.z += rotateSpeed;
 
-// 平行移動行列
-Matrix4x4 MakeTranslateMatrix(const Vector3& translate);
-// 拡大縮小行列
-Matrix4x4 MakeScaleMatrix(const Vector3& scale);
-// 座標変換
-Vector3 TransformMatrix(const Vector3& vector, const Matrix4x4& matrix);
+		// 前進（Zマイナス方向に）
+		tetraTransforms[i].translate.z -= speed;
 
-// X軸回転行列
-Matrix4x4 MakeRotateXMatrix(float radian);
-// Y軸回転行列
-Matrix4x4 MakeRotateYMatrix(float radian);
-// Z軸回転行列
-Matrix4x4 MakeRotateZMatrix(float radian);
-
-// 3次元アフィン変換行列
-Matrix4x4 MakeAffineMatrix(const Vector3& scale, const Vector3& translate, const Vector3& rotate);
-
-// 透視投影行列
-Matrix4x4 MakePerspectiveForMatrix(float fovY, float aspectRatio, float nearClip, float farClip);
-// 正射影行列
-Matrix4x4 MakeOrthographicMatrix(float left, float top, float right, float bottom, float nearClip, float farClip);
-// ビューポート変換行列
-Matrix4x4 MakeViewportMatrix(float left, float top, float width, float height, float minDepth, float maxDepth);
+		// 画面外でリセット
+		if (tetraTransforms[i].translate.z < -20.0f) {
+			tetraTransforms[i].translate = { Rand(-10.0f, 10.0f), Rand(-10.0f, 10.0f), Rand(40.0f, 80.0f) };
+			tetraTransforms[i].rotate = { 0.0f, 0.0f, 0.0f };
+		}
+	}
+}
 
 ID3D12Resource* CreateBufferResource(ID3D12Device* device, size_t sizeInBytes) {
 
@@ -179,6 +155,18 @@ ID3D12DescriptorHeap* CreateDescriptorHeap(ID3D12Device* device, D3D12_DESCRIPTO
 
 	return descriptorHeap;
 
+}
+
+D3D12_CPU_DESCRIPTOR_HANDLE GetCPUDescriptorHandle(ID3D12DescriptorHeap* descriptorHeap, uint32_t descriptorSize, uint32_t index) {
+	D3D12_CPU_DESCRIPTOR_HANDLE handleCPU = descriptorHeap->GetCPUDescriptorHandleForHeapStart();
+	handleCPU.ptr += (descriptorSize * index);
+	return handleCPU;
+}
+
+D3D12_GPU_DESCRIPTOR_HANDLE GetGPUDescriptorHandle(ID3D12DescriptorHeap* descriptorHeap, uint32_t descriptorSize, uint32_t index) {
+	D3D12_GPU_DESCRIPTOR_HANDLE handleGPU = descriptorHeap->GetGPUDescriptorHandleForHeapStart();
+	handleGPU.ptr += (descriptorSize * index);
+	return handleGPU;
 }
 
 IDxcBlob* CompileShader(
@@ -785,14 +773,17 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		IID_PPV_ARGS(&graphicsPipelineState));
 	assert(SUCCEEDED(hr));
 
-	ID3D12Resource* vertexResource = CreateBufferResource(device, sizeof(VertexData) * 6);
+	const uint32_t kSubdivision = 16; // 分割数
+
+	ID3D12Resource* vertexResource = CreateBufferResource(device, sizeof(VertexData) * 3 * 4 * kTetraCount);
 
 	// 頂点バッファビューを作成する
 	D3D12_VERTEX_BUFFER_VIEW vertexBufferView{};
 	// リソースの先頭アドレスを使う
 	vertexBufferView.BufferLocation = vertexResource->GetGPUVirtualAddress();
 	// 使用するリソースのサイズは頂点3つ分のサイズ
-	vertexBufferView.SizeInBytes = sizeof(VertexData) * 6;
+	//vertexBufferView.SizeInBytes = sizeof(VertexData) * kSubdivision * kSubdivision * 6;
+	vertexBufferView.SizeInBytes = sizeof(VertexData) * 3 * 4 * kTetraCount;
 	// 1頂点あたりのサイズ
 	vertexBufferView.StrideInBytes = sizeof(VertexData);
 
@@ -800,25 +791,188 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	VertexData* vertexData = nullptr;
 	// 書き込むためのアドレスを取得
 	vertexResource->Map(0, nullptr, reinterpret_cast<void**>(&vertexData));
-	// 左下
-	vertexData[0] = { -0.5f, -0.5f, 0.0f, 1.0f };
-	vertexData[0].texcoord = { 0.0f, 1.0f };
-	// 上
-	vertexData[1] = { 0.0f, 0.5f, 0.0f, 1.0f };
-	vertexData[1].texcoord = { 0.5f, 0.0f };
-	// 右下
-	vertexData[2] = { 0.5f, -0.5f, 0.0f, 1.0f };
-	vertexData[2].texcoord = { 1.0f, 1.0f };
+	//// 分割数
+	////const uint32_t kSubdivision = 16;
+	//const float kLonEvery = 2.0f * float(M_PI) / float(kSubdivision);
+	//const float kLatEvery = float(M_PI) / float(kSubdivision);
 
-	// 左下
-	vertexData[3] = { -0.5f, -0.5f, 0.5f, 1.0f };
-	vertexData[3].texcoord = { 0.0f, 1.0f };
-	// 上
-	vertexData[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
-	vertexData[4].texcoord = { 0.5f, 0.0f };
-	// 右下
-	vertexData[5] = { 0.5f, -0.5f, -0.5f, 1.0f };
-	vertexData[5].texcoord = { 1.0f, 1.0f };
+	//// 頂点データの書き込み
+	//for (uint32_t latIndex = 0; latIndex < kSubdivision; ++latIndex) {
+	//	// 各バンドの南端緯度と北端緯度
+	//	float lat = -0.5f * float(M_PI) + kLatEvery * float(latIndex);
+	//	float latN = lat + kLatEvery;
+	//	// sin/cos を一度だけ計算
+	//	float cosLat = cosf(lat);
+	//	float sinLat = sinf(lat);
+	//	float cosLatN = cosf(latN);
+	//	float sinLatN = sinf(latN);
+
+	//	for (uint32_t lonIndex = 0; lonIndex < kSubdivision; ++lonIndex) {
+	//		float lon = kLonEvery * float(lonIndex);
+	//		float lonN = lon + kLonEvery;
+	//		float cosLon = cosf(lon);
+	//		float sinLon = sinf(lon);
+	//		float cosLonN = cosf(lonN);
+	//		float sinLonN = sinf(lonN);
+
+	//		// テクスチャ座標
+	//		float u = float(lonIndex) / float(kSubdivision);
+	//		float uN = float(lonIndex + 1) / float(kSubdivision);
+	//		float v = 1.0f - float(latIndex) / float(kSubdivision);
+	//		float vN = 1.0f - float(latIndex + 1) / float(kSubdivision);
+
+	//		// 6頂点分のベースオフセット
+	//		uint32_t base = (latIndex * kSubdivision + lonIndex) * 6;
+
+	//		// 頂点位置を構築
+	//		// BL (Bottom-Left)
+	//		vertexData[base + 0].position = { cosLat * cosLon,  sinLat,  cosLat * sinLon, 1.0f };
+	//		vertexData[base + 0].texcoord = { u,  v };
+	//		// TL (Top-Left)
+	//		vertexData[base + 1].position = { cosLatN * cosLon,  sinLatN, cosLatN * sinLon, 1.0f };
+	//		vertexData[base + 1].texcoord = { u,  vN };
+	//		// BR (Bottom-Right)
+	//		vertexData[base + 2].position = { cosLat * cosLonN, sinLat,  cosLat * sinLonN, 1.0f };
+	//		vertexData[base + 2].texcoord = { uN, v };
+	//		// TR (Top-Right)
+	//		vertexData[base + 3].position = { cosLatN * cosLonN, sinLatN, cosLatN * sinLonN, 1.0f };
+	//		vertexData[base + 3].texcoord = { uN, vN };
+
+	//		// 三角形1 (BL, TL, BR)
+	//		// → 0,1,2
+	//		// 三角形2 (BR, TL, TR)  ※ワインディングを揃える
+	//		// → 2,1,3
+	//		vertexData[base + 4] = vertexData[base + 2]; // BR
+	//		vertexData[base + 5] = vertexData[base + 1]; // TL
+	//		//vertexData[base + 6] = vertexData[base + 3]; // TR
+	//		// （もしバッファが 6 連続でしか取れないなら、この部分だけ書き換えて 6 要素に収めてください）
+	//	}
+	//}
+
+	// 元のローカル座標
+	float s = 0.577f;
+	Vector4 v0 = { 0.0f, 1.0f,  0.0f };                          // 頂点A（上）
+	Vector4 v1 = { 2 * s, -1.0f / 3.0f,  0.0f };                 // 底面1
+	Vector4 v2 = { -s, -1.0f / 3.0f,  s * sqrtf(3.0f) };         // 底面2
+	Vector4 v3 = { -s, -1.0f / 3.0f, -s * sqrtf(3.0f) };         // 底面3
+
+	// 🔽 ここで底面の中心を計算
+	Vector4 baseCenter = {
+		(v1.x + v2.x + v3.x) / 3.0f,
+		(v1.y + v2.y + v3.y) / 3.0f,
+		(v1.z + v2.z + v3.z) / 3.0f,
+		1.0f
+	};
+
+	// 🔽 頂点すべてから baseCenter を引く（座標をオフセット補正）
+	v0 = Subtract(v0, baseCenter);
+	v1 = Subtract(v1, baseCenter);
+	v2 = Subtract(v2, baseCenter);
+	v3 = Subtract(v3, baseCenter);
+
+	Vector2 uv0 = { 0.5f, 0.0f };
+	Vector2 uv1 = { 1.0f, 1.0f };
+	Vector2 uv2 = { 0.0f, 1.0f };
+
+	// 面1（ABC）
+	for (int i = 0; i < kTetraCount; i++) {
+
+		float randam = Rand(-5.0f, 5.0f);
+
+		int start = i * 12;
+
+		vertexData[start + 0] = { v0, uv0 };
+		vertexData[start + 1] = { v1, uv1 };
+		vertexData[start + 2] = { v2, uv2 };
+
+		// 面2（ACD）
+		vertexData[start + 3] = { v0, uv0 };
+		vertexData[start + 4] = { v2, uv1 };
+		vertexData[start + 5] = { v3, uv2 };
+
+		// 面3（ADB）
+		vertexData[start + 6] = { v0, uv0 };
+		vertexData[start + 7] = { v3, uv1 };
+		vertexData[start + 8] = { v1, uv2 };
+
+		// 面4（BCD）→底面
+		vertexData[start + 9] = { v1, uv0 };
+		vertexData[start + 10] = { v3, uv2 };
+		vertexData[start + 11] = { v2, uv1 };
+	}
+
+	InitializeTetrahedrons();
+
+	//const float kLatEvery = pi / kSubdivision;       // 緯度（πをkSubdivisionで割る）
+	//const float kLonEvery = 2.0f * pi / kSubdivision; // 経度（2πをkSubdivisionで割る）
+
+	//uint32_t verticesNum = 0;
+
+	//for (uint32_t latIndex = 0; latIndex < kSubdivision; ++latIndex) {
+	//	float lat = -pi / 2.0f + kLatEvery * latIndex;
+	//	float nextLat = lat + kLatEvery;
+
+	//	for (uint32_t lonIndex = 0; lonIndex < kSubdivision; ++lonIndex) {
+	//		float lon = lonIndex * kLonEvery; // φ
+	//		float nextLon = lon + kLonEvery;
+
+	//		uint32_t startIndex = (latIndex * kSubdivision + lonIndex) * 6;
+
+	//		// a
+	//		vertexData[startIndex].position.x = std::cos(lat) * std::cos(lon);
+	//		vertexData[startIndex].position.y = std::sin(lat);
+	//		vertexData[startIndex].position.z = std::cos(lat) * std::sin(lon);
+	//		vertexData[startIndex].position.w = 1.0f;
+	//		vertexData[startIndex].texcoord.x = float(lonIndex) / float(kSubdivision);
+	//		vertexData[startIndex].texcoord.y = 1.0f - float(latIndex) / float(kSubdivision);
+
+	//		// b
+	//		vertexData[++startIndex].position.x = std::cos(nextLat) * std::cos(lon);
+	//		vertexData[startIndex].position.y = std::sin(nextLat);
+	//		vertexData[startIndex].position.z = std::cos(nextLat) * std::sin(lon);
+	//		vertexData[startIndex].position.w = 1.0f;
+	//		vertexData[startIndex].texcoord.x = float(lonIndex) / float(kSubdivision);
+	//		vertexData[startIndex].texcoord.y = 1.0f - float(latIndex) / float(kSubdivision);
+
+	//		// c
+	//		vertexData[++startIndex].position.x = std::cos(lat) * std::cos(nextLon);
+	//		vertexData[startIndex].position.y = std::sin(lat);
+	//		vertexData[startIndex].position.z = std::cos(lat) * std::sin(nextLon);
+	//		vertexData[startIndex].position.w = 1.0f;
+	//		vertexData[startIndex].texcoord.x = float(lonIndex) / float(kSubdivision);
+	//		vertexData[startIndex].texcoord.y = 1.0f - float(latIndex) / float(kSubdivision);
+
+	//		// c
+	//		vertexData[++startIndex].position.x = std::cos(lat) * std::cos(nextLon);
+	//		vertexData[startIndex].position.y = std::sin(lat);
+	//		vertexData[startIndex].position.z = std::cos(lat) * std::sin(nextLon);
+	//		vertexData[startIndex].position.w = 1.0f;
+	//		vertexData[startIndex].texcoord.x = float(lonIndex) / float(kSubdivision);
+	//		vertexData[startIndex].texcoord.y = 1.0f - float(latIndex) / float(kSubdivision);
+
+	//		// b
+	//		vertexData[++startIndex].position.x = std::cos(nextLat) * std::cos(lon);
+	//		vertexData[startIndex].position.y = std::sin(nextLat);
+	//		vertexData[startIndex].position.z = std::cos(nextLat) * std::sin(lon);
+	//		vertexData[startIndex].position.w = 1.0f;
+	//		vertexData[startIndex].texcoord.x = float(lonIndex) / float(kSubdivision);
+	//		vertexData[startIndex].texcoord.y = 1.0f - float(latIndex) / float(kSubdivision);
+
+	//		// d
+	//		vertexData[++startIndex].position.x = std::cos(nextLat) * std::cos(nextLon);
+	//		vertexData[startIndex].position.y = std::sin(nextLat);
+	//		vertexData[startIndex].position.z = std::cos(nextLat) * std::sin(nextLon);
+	//		vertexData[startIndex].position.w = 1.0f;
+	//		vertexData[startIndex].texcoord.x = float(lonIndex) / float(kSubdivision);
+	//		vertexData[startIndex].texcoord.y = 1.0f - float(latIndex) / float(kSubdivision);
+
+	//	}
+	//}
+
+	//std::vector<Vector4> test;
+	//for (uint32_t i = 0; i < kSubdivision * kSubdivision * 6; i++) {
+	//	test.push_back(vertexData[i].position);
+	//}
 
 	// Sprite用の頂点リソースを作る
 	ID3D12Resource* vertexResourceSprite = CreateBufferResource(device, sizeof(VertexData) * 6);
@@ -868,8 +1022,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	// 単位行列を書き込んでいく
 	*wvpData = MakeIdentity4x4();
 
-	Transform transform{ {1.0f, 1.0f,1.0f}, {0.0f, 0.0f,0.0f}, {0.0f,0.0f,0.0f} };
-	Transform cameraTransform{ {1.0f, 1.0f,1.0f}, {0.0f, 0.0f,0.0f}, {0.0f,0.0f,-5.0f} };
+	Transform transform{ {1.0f, 1.0f,1.0f}, {0.0f, 0.0f,0.0f}, {0.0f,0.0f,10.0f} };
+	Transform cameraTransform{ {1.0f, 1.0f,1.0f}, {0.0f, 0.0f,0.0f}, {0.0f,0.0f,-10.0f} };
 
 	// Sprite用のTransformationMatrix用のリソースを作る。Matrix4x41つ分のサイズを用意する
 	ID3D12Resource* transformationMatrixResourceSprite = CreateBufferResource(device, sizeof(Matrix4x4));
@@ -901,11 +1055,17 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	scissorRect.bottom = kClientHeight;
 
 	// Textureを読んで転送する
-	DirectX::ScratchImage mipImageas = LoadTexture("resources/uvChecker.png");
-	const DirectX::TexMetadata metadata = mipImageas.GetMetadata();
+	DirectX::ScratchImage mipImages = LoadTexture("resources/uvChecker.png");
+	const DirectX::TexMetadata metadata = mipImages.GetMetadata();
 	ID3D12Resource* textureResource = CreateTextureResource(device, metadata);
 
-	ID3D12Resource* intermediateResource = UploadTextureData(textureResource, mipImageas, device, commandList);
+	// 二枚目のTextureを読んで転送する
+	DirectX::ScratchImage mipImages2 = LoadTexture("resources/monsterBall.png");
+	const DirectX::TexMetadata metadata2 = mipImages2.GetMetadata();
+	ID3D12Resource* textureResource2 = CreateTextureResource(device, metadata2);
+
+	ID3D12Resource* intermediateResource = UploadTextureData(textureResource, mipImages, device, commandList);
+	ID3D12Resource* intermediateResource2 = UploadTextureData(textureResource2, mipImages2, device, commandList);
 	// コマンドリストの内容を確定させるすべてのコマンドを積んでからCloseすること
 	hr = commandList->Close();
 	assert(SUCCEEDED(hr));
@@ -933,6 +1093,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	hr = commandList->Reset(commandAllocator, nullptr);
 	assert(SUCCEEDED(hr));
 	intermediateResource->Release();
+	intermediateResource2->Release();
 
 	// Imguiの初期化
 	IMGUI_CHECKVERSION();
@@ -953,9 +1114,26 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D; // 2Dテクスチャ
 	srvDesc.Texture2D.MipLevels = UINT(metadata.mipLevels);
 
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc2{};
+	srvDesc2.Format = metadata2.format;
+	srvDesc2.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srvDesc2.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D; // 2Dテクスチャ
+	srvDesc2.Texture2D.MipLevels = UINT(metadata.mipLevels);
+
+	// DescriptorSizeを取得しておく
+	const uint32_t descriptorSizeSRV = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	const uint32_t descriptorSizeRTV = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+	const uint32_t descriptorSizeDSV = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+
+	GetCPUDescriptorHandle(rtvDescriptorHeap, descriptorSizeRTV, 0);
+
 	// SRVを作成するDescriptorHeapの場所を決める
 	D3D12_CPU_DESCRIPTOR_HANDLE textureSrvHandleCPU = srvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 	D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU = srvDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
+
+	// SRVを作成するDescriptorHeapの場所を決める
+	D3D12_CPU_DESCRIPTOR_HANDLE textureSrvHandleCPU2 = GetCPUDescriptorHandle(srvDescriptorHeap, descriptorSizeSRV, 2);
+	D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU2 = GetGPUDescriptorHandle(srvDescriptorHeap, descriptorSizeSRV, 2);
 
 	// 先端はImGuiが使っているのでその次を使う
 	textureSrvHandleCPU.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -963,7 +1141,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	// SRVの作成
 	device->CreateShaderResourceView(textureResource, &srvDesc, textureSrvHandleCPU);
+	device->CreateShaderResourceView(textureResource2, &srvDesc2, textureSrvHandleCPU2);
 
+	bool useMonsterBall = true;
 
 	MSG msg{};
 	// ウィンドウの×ボタンが押されるまでループ
@@ -980,30 +1160,68 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			ImGui::NewFrame();
 
 			// 三角形の位置などを変えられるようにする
-			ImGui::InputFloat3("scale", &transform.scale.x);
-			ImGui::InputFloat3("rotate", &transform.rotate.x);
-			ImGui::InputFloat3("translate", &transform.translate.x);
+			ImGui::DragFloat3("scale", &transform.scale.x, 0.1f);
+			ImGui::DragFloat3("rotate", &transform.rotate.x, 0.1f);
+			ImGui::DragFloat3("translate", &transform.translate.x, 0.1f);
 
 			// スライダーで変えられるようにする
-			ImGui::SliderFloat3("scale", &transform.scale.x, 0.0f, 3.0f);
-			ImGui::SliderFloat3("rotate", &transform.rotate.x, 0.0f, 100.0f);
-			ImGui::SliderFloat3("translate", &transform.translate.x, 0.0f, 3.0f);
+			//ImGui::SliderFloat3("scale", &transform.scale.x, 0.0f, 3.0f);
+			//ImGui::SliderFloat3("rotate", &transform.rotate.x, 0.0f, 100.0f);
+			//ImGui::SliderFloat3("translate", &transform.translate.x, 0.0f, 3.0f);
 
 			// 三角形の色を変えられるようにする
-			ImGui::ColorEdit4("Triangle color", &materialData->w);
+			ImGui::ColorEdit4("Triangle color", &materialData->x);
 
 			// スプライトもスライダーで変えられるようにする
 			ImGui::SliderFloat3("scaleSprite", &transformSprite.scale.x, 0.0f, 3.0f);
 			ImGui::SliderFloat3("rotateSprite", &transformSprite.rotate.x, 0.0f, 100.0f);
 			ImGui::SliderFloat3("translateSprite", &transformSprite.translate.x, 0.0f, 1280.0f);
 
+			ImGui::Checkbox("useMonsterBall", &useMonsterBall);
+
 			// 開発用UIの処理。実際に開発用のUIを出す場合はここをゲーム固有の処理に置き換える
 			ImGui::ShowDemoWindow();
 
 			// ImGuiの内部コマンドを生成する
 			ImGui::Render();
+			
+			//transform.rotate.x += 0.03f;
+			//transform.rotate.y += 0.03f;
+			//transform.rotate.z += 0.03f;
+			//transform.translate.z -= 0.1f;
 
-			transform.rotate.y += 0.03f;
+			// 三角錐の更新
+			UpdateTetrahedrons();
+			for (int i = 0; i < kTetraCount; i++) {
+				Matrix4x4 worldMatrix = MakeAffineMatrix(
+					tetraTransforms[i].scale,
+					
+					tetraTransforms[i].rotate,
+					tetraTransforms[i].translate
+					
+				);
+
+				// 三角錐のローカル頂点（v0〜v3）をワールド座標へ変換
+				Vector4 tv0 = { TransformMatrix({ v0.x, v0.y, v0.z,1.0f }, worldMatrix) };
+				Vector4 tv1 = { TransformMatrix({ v1.x, v1.y, v1.z,1.0f }, worldMatrix) };
+				Vector4 tv2 = { TransformMatrix({ v2.x, v2.y, v2.z,1.0f }, worldMatrix) };
+				Vector4 tv3 = { TransformMatrix({ v3.x, v3.y, v3.z,1.0f }, worldMatrix) };
+
+				int start = i * 12;
+
+				vertexData[start + 0] = { tv0, uv0 };
+				vertexData[start + 1] = { tv1, uv1 };
+				vertexData[start + 2] = { tv2, uv2 };
+				vertexData[start + 3] = { tv0, uv0 };
+				vertexData[start + 4] = { tv2, uv1 };
+				vertexData[start + 5] = { tv3, uv2 };
+				vertexData[start + 6] = { tv0, uv0 };
+				vertexData[start + 7] = { tv3, uv1 };
+				vertexData[start + 8] = { tv1, uv2 };
+				vertexData[start + 9] = { tv1, uv0 };
+				vertexData[start + 10] = { tv3, uv2 };
+				vertexData[start + 11] = { tv2, uv1 };
+			}
 
 			// Sprite用のWorldViewProjectionMatrixを作る
 			Matrix4x4 worldMatrixSprite = MakeAffineMatrix(transformSprite.scale, transformSprite.rotate, transformSprite.translate);
@@ -1015,10 +1233,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			Matrix4x4 worldMatrix = MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
 			Matrix4x4 cameraMatrix = MakeAffineMatrix(cameraTransform.scale, cameraTransform.rotate, cameraTransform.translate);
 			Matrix4x4 viewMatrix = Inverse(cameraMatrix);
-			Matrix4x4 projectionMatrix = MakePerspectiveForMatrix(0.45f, kClientWidth / kClientHeight, 0.1f, 100.0f);
+			Matrix4x4 projectionMatrix = MakePerspectiveForMatrix(0.45f, float(kClientWidth) / float(kClientHeight), 0.1f, 100.0f);
 			Matrix4x4 worldViewProjectionMatrix = Multiply(worldMatrix, Multiply(viewMatrix, projectionMatrix));
 			*wvpData = worldViewProjectionMatrix;
-
+		
 			// これから書き込むバックバッファのインデックスを取得
 			UINT backBufferIndex = swapChain->GetCurrentBackBufferIndex();
 			// TransitionBarrierの設定
@@ -1040,7 +1258,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 			commandList->OMSetRenderTargets(1, &rtvHandles[backBufferIndex], false, &dsvHandle);
 			// 指定した色で画面全体をクリアする
-			float clearColor[] = { 0.1f, 0.25f, 0.5f, 1.0f };
+			//float clearColor[] = { 0.1f, 0.25f, 0.5f, 1.0f };
+			float clearColor[] = { 0.0f, 0.0f, 0.0f, 1.0f };
 			commandList->ClearRenderTargetView(rtvHandles[backBufferIndex], clearColor, 0, nullptr);
 			// 指定して深度で画面全体をクリアする
 			commandList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
@@ -1060,16 +1279,17 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			// マテリアルCBufferの場所を特定
 			commandList->SetGraphicsRootConstantBufferView(0, materialResource->GetGPUVirtualAddress());
 			commandList->SetGraphicsRootConstantBufferView(1, wvpResource->GetGPUVirtualAddress());
-			commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU);
+			commandList->SetGraphicsRootDescriptorTable(2, useMonsterBall ? textureSrvHandleGPU2 : textureSrvHandleGPU);
 
 			// 描画!(DrawCall/ドローコール) 。3頂点で1つのインスタンス。 インスタンスについては今度
-			commandList->DrawInstanced(6, 1, 0, 0);
+			commandList->DrawInstanced(3 * 4 * kTetraCount, 1, 0, 0);
 
 			commandList->IASetVertexBuffers(0, 1, &vertexBufferViewSprite); //VBVを設定
 			commandList->SetGraphicsRootConstantBufferView(1, transformationMatrixResourceSprite->GetGPUVirtualAddress());
+			commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU);
 
 			// 描画!(DrawCall/ドローコール) 。3頂点で1つのインスタンス。 インスタンスについては今度
-			commandList->DrawInstanced(6, 1, 0, 0);
+			//commandList->DrawInstanced(6, 1, 0, 0);
 
 
 			// 画面に描く処理はすべて終わり、画面に移すので、状態を維持
@@ -1143,6 +1363,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	vertexResourceSprite->Release();
 	transformationMatrixResourceSprite->Release();
 	textureResource->Release();
+	textureResource2->Release();
 	graphicsPipelineState->Release();
 	signatureBlob->Release();
 	if (errorBlob) {
@@ -1168,457 +1389,4 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	CoUninitialize();
 
 	return 0;
-}
-
-Matrix4x4 Add(const Matrix4x4& m1, const Matrix4x4& m2) {
-
-	Matrix4x4 result;
-
-	result.m[0][0] = m1.m[0][0] + m2.m[0][0];
-	result.m[0][1] = m1.m[0][1] + m2.m[0][1];
-	result.m[0][2] = m1.m[0][2] + m2.m[0][2];
-	result.m[0][3] = m1.m[0][3] + m2.m[0][3];
-
-	result.m[1][0] = m1.m[1][0] + m2.m[1][0];
-	result.m[1][1] = m1.m[1][1] + m2.m[1][1];
-	result.m[1][2] = m1.m[1][2] + m2.m[1][2];
-	result.m[1][3] = m1.m[1][3] + m2.m[1][3];
-
-	result.m[2][0] = m1.m[2][0] + m2.m[2][0];
-	result.m[2][1] = m1.m[2][1] + m2.m[2][1];
-	result.m[2][2] = m1.m[2][2] + m2.m[2][2];
-	result.m[2][3] = m1.m[2][3] + m2.m[2][3];
-
-	result.m[3][0] = m1.m[3][0] + m2.m[3][0];
-	result.m[3][1] = m1.m[3][1] + m2.m[3][1];
-	result.m[3][2] = m1.m[3][2] + m2.m[3][2];
-	result.m[3][3] = m1.m[3][3] + m2.m[3][3];
-
-	return result;
-
-}
-
-Matrix4x4 Subtract(const Matrix4x4& m1, const Matrix4x4& m2) {
-
-	Matrix4x4 result;
-
-	result.m[0][0] = m1.m[0][0] - m2.m[0][0];
-	result.m[0][1] = m1.m[0][1] - m2.m[0][1];
-	result.m[0][2] = m1.m[0][2] - m2.m[0][2];
-	result.m[0][3] = m1.m[0][3] - m2.m[0][3];
-
-	result.m[1][0] = m1.m[1][0] - m2.m[1][0];
-	result.m[1][1] = m1.m[1][1] - m2.m[1][1];
-	result.m[1][2] = m1.m[1][2] - m2.m[1][2];
-	result.m[1][3] = m1.m[1][3] - m2.m[1][3];
-
-	result.m[2][0] = m1.m[2][0] - m2.m[2][0];
-	result.m[2][1] = m1.m[2][1] - m2.m[2][1];
-	result.m[2][2] = m1.m[2][2] - m2.m[2][2];
-	result.m[2][3] = m1.m[2][3] - m2.m[2][3];
-
-	result.m[3][0] = m1.m[3][0] - m2.m[3][0];
-	result.m[3][1] = m1.m[3][1] - m2.m[3][1];
-	result.m[3][2] = m1.m[3][2] - m2.m[3][2];
-	result.m[3][3] = m1.m[3][3] - m2.m[3][3];
-
-	return result;
-
-}
-
-Matrix4x4 Multiply(const Matrix4x4& m1, const Matrix4x4& m2) {
-
-	Matrix4x4 result;
-
-	result.m[0][0] = m1.m[0][0] * m2.m[0][0] + m1.m[0][1] * m2.m[1][0] + m1.m[0][2] * m2.m[2][0] + m1.m[0][3] * m2.m[3][0];
-	result.m[0][1] = m1.m[0][0] * m2.m[0][1] + m1.m[0][1] * m2.m[1][1] + m1.m[0][2] * m2.m[2][1] + m1.m[0][3] * m2.m[3][1];
-	result.m[0][2] = m1.m[0][0] * m2.m[0][2] + m1.m[0][1] * m2.m[1][2] + m1.m[0][2] * m2.m[2][2] + m1.m[0][3] * m2.m[3][2];
-	result.m[0][3] = m1.m[0][0] * m2.m[0][3] + m1.m[0][1] * m2.m[1][3] + m1.m[0][2] * m2.m[2][3] + m1.m[0][3] * m2.m[3][3];
-
-	result.m[1][0] = m1.m[1][0] * m2.m[0][0] + m1.m[1][1] * m2.m[1][0] + m1.m[1][2] * m2.m[2][0] + m1.m[1][3] * m2.m[3][0];
-	result.m[1][1] = m1.m[1][0] * m2.m[0][1] + m1.m[1][1] * m2.m[1][1] + m1.m[1][2] * m2.m[2][1] + m1.m[1][3] * m2.m[3][1];
-	result.m[1][2] = m1.m[1][0] * m2.m[0][2] + m1.m[1][1] * m2.m[1][2] + m1.m[1][2] * m2.m[2][2] + m1.m[1][3] * m2.m[3][2];
-	result.m[1][3] = m1.m[1][0] * m2.m[0][3] + m1.m[1][1] * m2.m[1][3] + m1.m[1][2] * m2.m[2][3] + m1.m[1][3] * m2.m[3][3];
-
-	result.m[2][0] = m1.m[2][0] * m2.m[0][0] + m1.m[2][1] * m2.m[1][0] + m1.m[2][2] * m2.m[2][0] + m1.m[2][3] * m2.m[3][0];
-	result.m[2][1] = m1.m[2][0] * m2.m[0][1] + m1.m[2][1] * m2.m[1][1] + m1.m[2][2] * m2.m[2][1] + m1.m[2][3] * m2.m[3][1];
-	result.m[2][2] = m1.m[2][0] * m2.m[0][2] + m1.m[2][1] * m2.m[1][2] + m1.m[2][2] * m2.m[2][2] + m1.m[2][3] * m2.m[3][2];
-	result.m[2][3] = m1.m[2][0] * m2.m[0][3] + m1.m[2][1] * m2.m[1][3] + m1.m[2][2] * m2.m[2][3] + m1.m[2][3] * m2.m[3][3];
-
-	result.m[3][0] = m1.m[3][0] * m2.m[0][0] + m1.m[3][1] * m2.m[1][0] + m1.m[3][2] * m2.m[2][0] + m1.m[3][3] * m2.m[3][0];
-	result.m[3][1] = m1.m[3][0] * m2.m[0][1] + m1.m[3][1] * m2.m[1][1] + m1.m[3][2] * m2.m[2][1] + m1.m[3][3] * m2.m[3][1];
-	result.m[3][2] = m1.m[3][0] * m2.m[0][2] + m1.m[3][1] * m2.m[1][2] + m1.m[3][2] * m2.m[2][2] + m1.m[3][3] * m2.m[3][2];
-	result.m[3][3] = m1.m[3][0] * m2.m[0][3] + m1.m[3][1] * m2.m[1][3] + m1.m[3][2] * m2.m[2][3] + m1.m[3][3] * m2.m[3][3];
-
-	return result;
-
-}
-
-Matrix4x4 Inverse(const Matrix4x4& m) {
-
-	float inverse =
-		m.m[0][0] * m.m[1][1] * m.m[2][2] * m.m[3][3] + m.m[0][0] * m.m[1][2] * m.m[2][3] * m.m[3][1] + m.m[0][0] * m.m[1][3] * m.m[2][1] * m.m[3][2]
-		- m.m[0][0] * m.m[1][3] * m.m[2][2] * m.m[3][1] - m.m[0][0] * m.m[1][2] * m.m[2][1] * m.m[3][3] - m.m[0][0] * m.m[1][1] * m.m[2][3] * m.m[3][2]
-		- m.m[0][1] * m.m[1][0] * m.m[2][2] * m.m[3][3] - m.m[0][2] * m.m[1][0] * m.m[2][3] * m.m[3][1] - m.m[0][3] * m.m[1][0] * m.m[2][1] * m.m[3][2]
-		+ m.m[0][3] * m.m[1][0] * m.m[2][2] * m.m[3][1] + m.m[0][2] * m.m[1][0] * m.m[2][1] * m.m[3][3] + m.m[0][1] * m.m[1][0] * m.m[2][3] * m.m[3][2]
-		+ m.m[0][1] * m.m[1][2] * m.m[2][0] * m.m[3][3] + m.m[0][2] * m.m[1][3] * m.m[2][0] * m.m[3][1] + m.m[0][3] * m.m[1][1] * m.m[2][0] * m.m[3][2]
-		- m.m[0][3] * m.m[1][2] * m.m[2][0] * m.m[3][1] - m.m[0][2] * m.m[1][1] * m.m[2][0] * m.m[3][3] - m.m[0][1] * m.m[1][3] * m.m[2][0] * m.m[3][2]
-		- m.m[0][1] * m.m[1][2] * m.m[2][3] * m.m[3][0] - m.m[0][2] * m.m[1][3] * m.m[2][1] * m.m[3][0] - m.m[0][3] * m.m[1][1] * m.m[2][2] * m.m[3][0]
-		+ m.m[0][3] * m.m[1][2] * m.m[2][1] * m.m[3][0] + m.m[0][2] * m.m[1][1] * m.m[2][3] * m.m[3][0] + m.m[0][1] * m.m[1][3] * m.m[2][2] * m.m[3][0];
-
-	Matrix4x4 result;
-	result.m[0][0] = (
-		m.m[1][1] * m.m[2][2] * m.m[3][3] + m.m[1][2] * m.m[2][3] * m.m[3][1] + m.m[1][3] * m.m[2][1] * m.m[3][2] -
-		m.m[1][3] * m.m[2][2] * m.m[3][1] - m.m[1][2] * m.m[2][1] * m.m[3][3] - m.m[1][1] * m.m[2][3] * m.m[3][2]) / inverse;
-	result.m[0][1] = (-
-		m.m[0][1] * m.m[2][2] * m.m[3][3] - m.m[0][2] * m.m[2][3] * m.m[3][1] - m.m[0][3] * m.m[2][1] * m.m[3][2] +
-		m.m[0][3] * m.m[2][2] * m.m[3][1] + m.m[0][2] * m.m[2][1] * m.m[3][3] + m.m[0][1] * m.m[2][3] * m.m[3][2]) / inverse;
-	result.m[0][2] = (
-		m.m[0][1] * m.m[1][2] * m.m[3][3] + m.m[0][2] * m.m[1][3] * m.m[3][1] + m.m[0][3] * m.m[1][1] * m.m[3][2] -
-		m.m[0][3] * m.m[1][2] * m.m[3][1] - m.m[0][2] * m.m[1][1] * m.m[3][3] - m.m[0][1] * m.m[1][3] * m.m[3][2]) / inverse;
-	result.m[0][3] = (-
-		m.m[0][1] * m.m[1][2] * m.m[2][3] - m.m[0][2] * m.m[1][3] * m.m[2][1] - m.m[0][3] * m.m[1][1] * m.m[2][2] +
-		m.m[0][3] * m.m[1][2] * m.m[2][1] + m.m[0][2] * m.m[1][1] * m.m[2][3] + m.m[0][1] * m.m[1][3] * m.m[2][2]) / inverse;
-	result.m[1][0] = (-
-		m.m[1][0] * m.m[2][2] * m.m[3][3] - m.m[1][2] * m.m[2][3] * m.m[3][0] - m.m[1][3] * m.m[2][0] * m.m[3][2] +
-		m.m[1][3] * m.m[2][2] * m.m[3][0] + m.m[1][2] * m.m[2][0] * m.m[3][3] + m.m[1][0] * m.m[2][3] * m.m[3][2]) / inverse;
-	result.m[1][1] = (
-		m.m[0][0] * m.m[2][2] * m.m[3][3] + m.m[0][2] * m.m[2][3] * m.m[3][0] + m.m[0][3] * m.m[2][0] * m.m[3][2] -
-		m.m[0][3] * m.m[2][2] * m.m[3][0] - m.m[0][2] * m.m[2][0] * m.m[3][3] - m.m[0][0] * m.m[2][3] * m.m[3][2]) / inverse;
-	result.m[1][2] = (-
-		m.m[0][0] * m.m[1][2] * m.m[3][3] - m.m[0][2] * m.m[1][3] * m.m[3][0] - m.m[0][3] * m.m[1][0] * m.m[3][2] +
-		m.m[0][3] * m.m[1][2] * m.m[3][0] + m.m[0][2] * m.m[1][0] * m.m[3][3] + m.m[0][0] * m.m[1][3] * m.m[3][2]) / inverse;
-	result.m[1][3] = (
-		m.m[0][0] * m.m[1][2] * m.m[2][3] + m.m[0][2] * m.m[1][3] * m.m[2][0] + m.m[0][3] * m.m[1][0] * m.m[2][2] -
-		m.m[0][3] * m.m[1][2] * m.m[2][0] - m.m[0][2] * m.m[1][0] * m.m[2][3] - m.m[0][0] * m.m[1][3] * m.m[2][2]) / inverse;
-	result.m[2][0] = (
-		m.m[1][0] * m.m[2][1] * m.m[3][3] + m.m[1][1] * m.m[2][3] * m.m[3][0] + m.m[1][3] * m.m[2][0] * m.m[3][1] -
-		m.m[1][3] * m.m[2][1] * m.m[3][0] - m.m[1][1] * m.m[2][0] * m.m[3][3] - m.m[1][0] * m.m[2][3] * m.m[3][1]) / inverse;
-	result.m[2][1] = (-
-		m.m[0][0] * m.m[2][1] * m.m[3][3] - m.m[0][1] * m.m[2][3] * m.m[3][0] - m.m[0][3] * m.m[2][0] * m.m[3][1] +
-		m.m[0][3] * m.m[2][1] * m.m[3][0] + m.m[0][1] * m.m[2][0] * m.m[3][3] + m.m[0][0] * m.m[2][3] * m.m[3][1]) / inverse;
-	result.m[2][2] = (
-		m.m[0][0] * m.m[1][1] * m.m[3][3] + m.m[0][1] * m.m[1][3] * m.m[3][0] + m.m[0][3] * m.m[1][0] * m.m[3][1] -
-		m.m[0][3] * m.m[1][1] * m.m[3][0] - m.m[0][1] * m.m[1][0] * m.m[3][3] - m.m[0][0] * m.m[1][3] * m.m[3][1]) / inverse;
-	result.m[2][3] = (-
-		m.m[0][0] * m.m[1][1] * m.m[2][3] - m.m[0][1] * m.m[1][3] * m.m[2][0] - m.m[0][3] * m.m[1][0] * m.m[2][1] +
-		m.m[0][3] * m.m[1][1] * m.m[2][0] + m.m[0][1] * m.m[1][0] * m.m[2][3] + m.m[0][0] * m.m[1][3] * m.m[2][1]) / inverse;
-	result.m[3][0] = (-
-		m.m[1][0] * m.m[2][1] * m.m[3][2] - m.m[1][1] * m.m[2][2] * m.m[3][0] - m.m[1][2] * m.m[2][0] * m.m[3][1] +
-		m.m[1][2] * m.m[2][1] * m.m[3][0] + m.m[1][1] * m.m[2][0] * m.m[3][2] + m.m[1][0] * m.m[2][2] * m.m[3][1]) / inverse;
-	result.m[3][1] = (
-		m.m[0][0] * m.m[2][1] * m.m[3][2] + m.m[0][1] * m.m[2][2] * m.m[3][0] + m.m[0][2] * m.m[2][0] * m.m[3][1] -
-		m.m[0][2] * m.m[2][1] * m.m[3][0] - m.m[0][1] * m.m[2][0] * m.m[3][2] - m.m[0][0] * m.m[2][2] * m.m[3][1]) / inverse;
-	result.m[3][2] = (-
-		m.m[0][0] * m.m[1][1] * m.m[3][2] - m.m[0][1] * m.m[1][2] * m.m[3][0] - m.m[0][2] * m.m[1][0] * m.m[3][1] +
-		m.m[0][2] * m.m[1][1] * m.m[3][0] + m.m[0][1] * m.m[1][0] * m.m[3][2] + m.m[0][0] * m.m[1][2] * m.m[3][1]) / inverse;
-	result.m[3][3] = (
-		m.m[0][0] * m.m[1][1] * m.m[2][2] + m.m[0][1] * m.m[1][2] * m.m[2][0] + m.m[0][2] * m.m[1][0] * m.m[2][1] -
-		m.m[0][2] * m.m[1][1] * m.m[2][0] - m.m[0][1] * m.m[1][0] * m.m[2][2] - m.m[0][0] * m.m[1][2] * m.m[2][1]) / inverse;
-	return result;
-
-}
-
-Matrix4x4 Transpose(const Matrix4x4& m) {
-
-	Matrix4x4 result;
-
-	result.m[0][0] = m.m[0][0];
-	result.m[0][1] = m.m[1][0];
-	result.m[0][2] = m.m[2][0];
-	result.m[0][3] = m.m[3][0];
-
-	result.m[1][0] = m.m[0][1];
-	result.m[1][1] = m.m[1][1];
-	result.m[1][2] = m.m[2][1];
-	result.m[1][3] = m.m[3][1];
-
-	result.m[2][0] = m.m[0][2];
-	result.m[2][1] = m.m[1][2];
-	result.m[2][2] = m.m[2][2];
-	result.m[2][3] = m.m[3][2];
-
-	result.m[3][0] = m.m[0][3];
-	result.m[3][1] = m.m[1][3];
-	result.m[3][2] = m.m[2][3];
-	result.m[3][3] = m.m[3][3];
-
-	return result;
-
-}
-
-Matrix4x4 MakeIdentity4x4() {
-
-	Matrix4x4 result;
-
-	result.m[0][0] = 1.0f;
-	result.m[0][1] = 0.0f;
-	result.m[0][2] = 0.0f;
-	result.m[0][3] = 0.0f;
-
-	result.m[1][0] = 0.0f;
-	result.m[1][1] = 1.0f;
-	result.m[1][2] = 0.0f;
-	result.m[1][3] = 0.0f;
-
-	result.m[2][0] = 0.0f;
-	result.m[2][1] = 0.0f;
-	result.m[2][2] = 1.0f;
-	result.m[2][3] = 0.0f;
-
-	result.m[3][0] = 0.0f;
-	result.m[3][1] = 0.0f;
-	result.m[3][2] = 0.0f;
-	result.m[3][3] = 1.0f;
-
-	return result;
-
-}
-
-Matrix4x4 MakeTranslateMatrix(const Vector3& translate) {
-
-	Matrix4x4 result;
-
-	result.m[0][0] = 1.0f;
-	result.m[0][1] = 0.0f;
-	result.m[0][2] = 0.0f;
-	result.m[0][3] = 0.0f;
-
-	result.m[1][0] = 0.0f;
-	result.m[1][1] = 1.0f;
-	result.m[1][2] = 0.0f;
-	result.m[1][3] = 0.0f;
-
-	result.m[2][0] = 0.0f;
-	result.m[2][1] = 0.0f;
-	result.m[2][2] = 1.0f;
-	result.m[2][3] = 0.0f;
-
-	result.m[3][0] = translate.x;
-	result.m[3][1] = translate.y;
-	result.m[3][2] = translate.z;
-	result.m[3][3] = 1.0f;
-
-	return result;
-
-}
-
-Matrix4x4 MakeScaleMatrix(const Vector3& scale) {
-
-	Matrix4x4 result;
-
-	result.m[0][0] = scale.x;
-	result.m[0][1] = 0.0f;
-	result.m[0][2] = 0.0f;
-	result.m[0][3] = 0.0f;
-
-	result.m[1][0] = 0.0f;
-	result.m[1][1] = scale.y;
-	result.m[1][2] = 0.0f;
-	result.m[1][3] = 0.0f;
-
-	result.m[2][0] = 0.0f;
-	result.m[2][1] = 0.0f;
-	result.m[2][2] = scale.z;
-	result.m[2][3] = 0.0f;
-
-	result.m[3][0] = 0.0f;
-	result.m[3][1] = 0.0f;
-	result.m[3][2] = 0.0f;
-	result.m[3][3] = 1.0f;
-
-	return result;
-}
-
-Vector3 TransformMatrix(const Vector3& vector, const Matrix4x4& matrix) {
-
-	Vector3 result;
-
-	result.x = vector.x * matrix.m[0][0] + vector.y * matrix.m[1][0] + vector.z * matrix.m[2][0] + 1.0f * matrix.m[3][0];
-	result.y = vector.x * matrix.m[0][1] + vector.y * matrix.m[1][1] + vector.z * matrix.m[2][1] + 1.0f * matrix.m[3][1];
-	result.z = vector.x * matrix.m[0][2] + vector.y * matrix.m[1][2] + vector.z * matrix.m[2][2] + 1.0f * matrix.m[3][2];
-	float w = vector.x * matrix.m[0][3] + vector.y * matrix.m[1][3] + vector.z * matrix.m[2][3] + 1.0f * matrix.m[3][3];
-
-	assert(w != 0.0f);
-	result.x /= w;
-	result.y /= w;
-	result.z /= w;
-	return result;
-
-}
-
-
-Matrix4x4 MakeRotateXMatrix(float radian) {
-
-	Matrix4x4 result;
-
-	result.m[0][0] = 1.0f;
-	result.m[0][1] = 0.0f;
-	result.m[0][2] = 0.0f;
-	result.m[0][3] = 0.0f;
-
-	result.m[1][0] = 0.0f;
-	result.m[1][1] = std::cos(radian);
-	result.m[1][2] = std::sin(radian);
-	result.m[1][3] = 0.0f;
-
-	result.m[2][0] = 0.0f;
-	result.m[2][1] = -std::sin(radian);
-	result.m[2][2] = std::cos(radian);
-	result.m[2][3] = 0.0f;
-
-	result.m[3][0] = 0.0f;
-	result.m[3][1] = 0.0f;
-	result.m[3][2] = 0.0f;
-	result.m[3][3] = 1.0f;
-
-	return result;
-
-}
-
-Matrix4x4 MakeRotateYMatrix(float radian) {
-
-	Matrix4x4 result;
-
-	result.m[0][0] = std::cos(radian);
-	result.m[0][1] = 0.0f;
-	result.m[0][2] = -std::sin(radian);
-	result.m[0][3] = 0.0f;
-
-	result.m[1][0] = 0.0f;
-	result.m[1][1] = 1.0f;
-	result.m[1][2] = 0.0f;
-	result.m[1][3] = 0.0f;
-
-	result.m[2][0] = std::sin(radian);
-	result.m[2][1] = 0.0f;
-	result.m[2][2] = std::cos(radian);
-	result.m[2][3] = 0.0f;
-
-	result.m[3][0] = 0.0f;
-	result.m[3][1] = 0.0f;
-	result.m[3][2] = 0.0f;
-	result.m[3][3] = 1.0f;
-
-	return result;
-
-}
-
-Matrix4x4 MakeRotateZMatrix(float radian) {
-
-	Matrix4x4 result;
-
-	result.m[0][0] = std::cos(radian);
-	result.m[0][1] = std::sin(radian);
-	result.m[0][2] = 0.0f;
-	result.m[0][3] = 0.0f;
-
-	result.m[1][0] = -std::sin(radian);
-	result.m[1][1] = std::cos(radian);
-	result.m[1][2] = 0.0f;
-	result.m[1][3] = 0.0f;
-
-	result.m[2][0] = 0.0f;
-	result.m[2][1] = 0.0f;
-	result.m[2][2] = 1.0f;
-	result.m[2][3] = 0.0f;
-
-	result.m[3][0] = 0.0f;
-	result.m[3][1] = 0.0f;
-	result.m[3][2] = 0.0f;
-	result.m[3][3] = 1.0f;
-
-	return result;
-
-}
-
-Matrix4x4 MakeAffineMatrix(const Vector3& scale, const Vector3& rotate, const Vector3& translate) {
-
-	Matrix4x4 translateMatrix = MakeTranslateMatrix(translate);
-	Matrix4x4 scaleMatrix = MakeScaleMatrix(scale);
-	Matrix4x4 rotateXMatrix = MakeRotateXMatrix(rotate.x);
-	Matrix4x4 rotateYMatrix = MakeRotateYMatrix(rotate.y);
-	Matrix4x4 rotateZMatrix = MakeRotateZMatrix(rotate.z);
-
-	return Multiply(Multiply(Multiply(scaleMatrix, rotateXMatrix), Multiply(rotateYMatrix, rotateZMatrix)), translateMatrix);
-}
-
-Matrix4x4 MakePerspectiveForMatrix(float fovY, float aspectRatio, float nearClip, float farClip) {
-
-	Matrix4x4 result;
-
-	result.m[0][0] = (1.0f / aspectRatio) * (1.0f / std::tan(fovY / 2.0f));
-	result.m[0][1] = 0.0f;
-	result.m[0][2] = 0.0f;
-	result.m[0][3] = 0.0f;
-
-	result.m[1][0] = 0.0f;
-	result.m[1][1] = (1.0f / std::tan(fovY / 2.0f));
-	result.m[1][2] = 0.0f;
-	result.m[1][3] = 0.0f;
-
-	result.m[2][0] = 0.0f;
-	result.m[2][1] = 0.0f;
-	result.m[2][2] = (farClip) / (farClip - nearClip);
-	result.m[2][3] = 1.0f;
-
-	result.m[3][0] = 0.0f;
-	result.m[3][1] = 0.0f;
-	result.m[3][2] = -(farClip * nearClip) / (farClip - nearClip);
-	result.m[3][3] = 0.0f;
-
-	return result;
-}
-
-Matrix4x4 MakeOrthographicMatrix(float left, float top, float right, float bottom, float nearClip, float farClip) {
-
-	Matrix4x4 result;
-	result.m[0][0] = 2.0f / (right - left);
-	result.m[0][1] = 0.0f;
-	result.m[0][2] = 0.0f;
-	result.m[0][3] = 0.0f;
-
-	result.m[1][0] = 0.0f;
-	result.m[1][1] = 2.0f / (top - bottom);
-	result.m[1][2] = 0.0f;
-	result.m[1][3] = 0.0f;
-
-	result.m[2][0] = 0.0f;
-	result.m[2][1] = 0.0f;
-	result.m[2][2] = 1.0f / (farClip - nearClip);
-	result.m[2][3] = 0.0f;
-
-	result.m[3][0] = (left + right) / (left - right);
-	result.m[3][1] = (top + bottom) / (bottom - top);
-	result.m[3][2] = nearClip / (nearClip - farClip);
-	result.m[3][3] = 1.0f;
-
-	return result;
-}
-
-Matrix4x4 MakeViewportMatrix(float left, float top, float width, float height, float minDepth, float maxDepth) {
-
-	Matrix4x4 result;
-
-	result.m[0][0] = width / 2.0f;
-	result.m[0][1] = 0.0f;
-	result.m[0][2] = 0.0f;
-	result.m[0][3] = 0.0f;
-
-	result.m[1][0] = 0.0f;
-	result.m[1][1] = -height / 2.0f;
-	result.m[1][2] = 0.0f;
-	result.m[1][3] = 0.0f;
-
-	result.m[2][0] = 0.0f;
-	result.m[2][1] = 0.0f;
-	result.m[2][2] = maxDepth - minDepth;
-	result.m[2][3] = 0.0f;
-
-	result.m[3][0] = left + width / 2.0f;
-	result.m[3][1] = top + height / 2.0f;
-	result.m[3][2] = minDepth;
-	result.m[3][3] = 1.0f;
-
-	return result;
 }
