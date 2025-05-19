@@ -987,7 +987,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			ImGui::Checkbox("useMonsterBall", &useMonsterBall);
 
 			// 開発用UIの処理。実際に開発用のUIを出す場合はここをゲーム固有の処理に置き換える
-			ImGui::ShowDemoWindow();
+			//ImGui::ShowDemoWindow();
 
 			// ImGuiの内部コマンドを生成する
 			ImGui::Render();
