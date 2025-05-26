@@ -57,7 +57,8 @@ struct Sphere {
 struct Material {
 	Vector4 color; 
 	int32_t ensbleLighting;
-	//Matrix3x3 uvTransform;
+	float padding[3];
+	Matrix4x4 uvTransform;
 };
 
 
@@ -71,6 +72,15 @@ struct DirectionalLight {
 	Vector4 color; // ライトの色
 	Vector3 direction; // ライトの方向
 	float intensity; // ライトの光度
+};
+
+struct MaterialData {
+	std::string textureFilePath;
+};
+
+struct ModelData {
+	std::vector<VertexData> vertices;
+	MaterialData material;
 };
 
 const float pi = 3.14159265f;
