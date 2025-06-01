@@ -33,8 +33,9 @@ bld/
 [Ll]og/
 [Ll]ogs/
 
-# Ignore Dumps
+# Ignore Dumps and logs
 Dumps/
+logs/
 
 #Ignore imgui.ini
 imgui.ini
