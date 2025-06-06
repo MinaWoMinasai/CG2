@@ -32,11 +32,47 @@
 #include <wrl.h>
 #include <xaudio2.h>
 #pragma comment(lib,"xaudio2.lib")
+#define DIRECTINPUT_VERSION 0x0800
+#include <dinput.h>
+#pragma comment(lib, "dinput8.lib")
+#pragma comment(lib, "dxguid.lib")
 
 float Rand(float min, float max) {
 	static std::mt19937 rng(std::random_device{}()); // 一度だけ初期化
 	std::uniform_real_distribution<float> dist(min, max);
 	return dist(rng);
+}
+
+// キーが押されている状態か
+bool IsPressKey(uint8_t key) {
+	if (key) {
+		return true;
+	}
+	return false;
+}
+
+// キーが離されている状態か
+bool IsReleaseKey(uint8_t key) {
+	if (!key) {
+		return true;
+	}
+	return false;
+}
+
+// キーが押された瞬間か
+bool IsTriggerKey(uint8_t key, uint8_t preKey) {
+	if (!preKey && key) {
+		return true;
+	}
+	return false;
+}
+
+// キーが離された瞬間か
+bool IsMomentReleaseKey(uint8_t key, uint8_t prekey) {
+	if (prekey && !key) {
+		return true;
+	}
+	return false;
 }
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
@@ -655,9 +691,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	// ウィンドウクラスを登録する
 	RegisterClass(&wc);
 
-	const int32_t kClientWidth = 1280;
-	const int32_t kClientHeight = 720;
-
 	// ウィンドウサイズを表す構造体にクライアント領域を入れる
 	RECT wrc = { 0,0,kClientWidth, kClientHeight };
 
@@ -691,8 +724,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	// ウィンドウを表示する
 	ShowWindow(hwnd, SW_SHOW);
 
-	// DXGIファクトリーの生成
-	//Microsoft::WRL::ComPtr<IDXGIFactory7> dxgiFactory = nullptr;
 	// HRESULTはWindows系のエラーコードであり。
 	// 関数が成功したかどうかをSUCCEEDEDマクロで判定できる
 	HRESULT hr = CreateDXGIFactory(IID_PPV_ARGS(&dxgiFactory));
@@ -721,7 +752,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	// 適切なアダプタが見当たらなかったので起動できない
 	assert(useAdapter != nullptr);
 
-	//Microsoft::WRL::ComPtr<ID3D12Device> device = nullptr;
 	// 機能レベルとログ出力用の文字列
 	D3D_FEATURE_LEVEL featureLevels[] = {
 		D3D_FEATURE_LEVEL_12_2, D3D_FEATURE_LEVEL_12_1, D3D_FEATURE_LEVEL_12_0
@@ -741,6 +771,26 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	// デバイスの生成が上手くいかなかったので起動できない
 	assert(device != nullptr);
 	Log("Complete create D3D12Device!!!\n");// 初期化完了のログを出す
+
+	// DirectInputの初期化
+	IDirectInput8* directInput = nullptr;
+	hr = DirectInput8Create(
+		wc.hInstance, DIRECTINPUT_VERSION, IID_IDirectInput8,
+		(void**)&directInput, nullptr
+	);
+	assert(SUCCEEDED(hr));
+
+	IDirectInputDevice8* keyboard = nullptr;
+	hr = directInput->CreateDevice(GUID_SysKeyboard, &keyboard, NULL);
+	assert(SUCCEEDED(hr));
+
+	hr = keyboard->SetDataFormat(&c_dfDIKeyboard); // 標準形式
+	assert(SUCCEEDED(hr));
+
+	// 排他制御レベルのセット
+	hr = keyboard->SetCooperativeLevel(
+		hwnd, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE | DISCL_NOWINKEY);
+	assert(SUCCEEDED(hr));
 
 #ifdef _DEBUG
 
@@ -1263,21 +1313,54 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	// 音声再生
 	SoundPlayWave(xAudio2.Get(), soundData1);
 	Log(logStream, "Playing sound file: " + soundData1.filePath);
+	
+	BYTE key[256] = {};
+	BYTE preKey[256] = {};
 
 	MSG msg{};
+#ifdef _DEBUG
+	// メインループ開始
+	Log("Starting main loop\n");
+#endif 
 	// ウィンドウの×ボタンが押されるまでループ
 	while (msg.message != WM_QUIT) {
 
-#ifdef _DEBUG
-		// メインループ開始
-		Log("Starting main loop");
-#endif 
 		// Windowにメッセージが来てたら最優先で処理させる
 		if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);
 		} else {
 			// ゲームの処理
+
+			// キーボード情報の取得開始
+			
+			// 前のフレームのキー状態を保存
+			memcpy(preKey, key, sizeof(key));
+			keyboard->Acquire();
+			keyboard->GetDeviceState(sizeof(key), key);
+
+			if (IsPressKey(key[DIK_0])) {
+				OutputDebugStringA("Hit 0\n");
+			}
+
+			if (IsTriggerKey(key[DIK_2], preKey[DIK_2])) {
+				
+				if (useMonsterBall) {
+					useMonsterBall = false;
+				} else {
+					useMonsterBall = true;
+				}
+
+			}
+
+			if (IsMomentReleaseKey(key[DIK_3], preKey[DIK_3])) {
+
+				if (useMonsterBall) {
+					useMonsterBall = false;
+				} else {
+					useMonsterBall = true;
+				}
+			}
 
 			ImGui_ImplDX12_NewFrame();
 			ImGui_ImplWin32_NewFrame();
