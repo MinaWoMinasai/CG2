@@ -112,6 +112,9 @@ Vector3 Cross(const Vector3& v1, const Vector3& v2);
 // 正規化
 Vector3 Normalize(const Vector3& v);
 
+// ベクトル変換
+Vector3 TransformNormal(const Vector3& v, const Matrix4x4& m);
+
 // 行列の加算
 Matrix4x4 Add(const Matrix4x4& m1, const Matrix4x4& m2);
 // 行列の減産
@@ -142,7 +145,7 @@ Matrix4x4 MakeRotateYMatrix(float radian);
 Matrix4x4 MakeRotateZMatrix(float radian);
 
 // 3次元アフィン変換行列
-Matrix4x4 MakeAffineMatrix(const Vector3& scale, const Vector3& translate, const Vector3& rotate);
+Matrix4x4 MakeAffineMatrix(const Vector3& scale, const Vector3& rotate, const Vector3& translate);
 
 // 透視投影行列
 Matrix4x4 MakePerspectiveForMatrix(float fovY, float aspectRatio, float nearClip, float farClip);
@@ -150,3 +153,5 @@ Matrix4x4 MakePerspectiveForMatrix(float fovY, float aspectRatio, float nearClip
 Matrix4x4 MakeOrthographicMatrix(float left, float top, float right, float bottom, float nearClip, float farClip);
 // ビューポート変換行列
 Matrix4x4 MakeViewportMatrix(float left, float top, float width, float height, float minDepth, float maxDepth);
+// LookAt行列
+Matrix4x4 MakeLookAtMatrix(const Vector3& eye, const Vector3& target, const Vector3& up);

@@ -71,6 +71,18 @@ Vector3 Normalize(const Vector3& v) {
 
 }
 
+Vector3 TransformNormal(const Vector3& v, const Matrix4x4& m)
+{
+	
+	Vector3 result{
+		v.x * m.m[0][0] + v.y * m.m[1][0] + v.z * m.m[2][0],
+		v.x * m.m[0][1] + v.y * m.m[1][1] + v.z * m.m[2][1],
+		v.x * m.m[0][2] + v.y * m.m[1][2] + v.z * m.m[2][2],
+	};
+
+	return result;
+}
+
 Vector3 Cross(const Vector3& v1, const Vector3& v2) {
 
 	Vector3 result;
@@ -584,4 +596,42 @@ Matrix4x4 MakeViewportMatrix(float left, float top, float width, float height, f
 	result.m[3][3] = 1.0f;
 
 	return result;
+}
+
+Matrix4x4 MakeLookAtMatrix(const Vector3& eye, const Vector3& target, const Vector3& up)
+{
+	// カメラの前方向（Z軸、逆方向に向くので eye - target）
+	Vector3 zAxis = Normalize(Subtract(eye, target));
+
+	// カメラの右方向（X軸）: up × z
+	Vector3 xAxis = Normalize(Cross(up, zAxis));
+
+	// カメラの上方向（Y軸）: z × x
+	Vector3 yAxis = Cross(zAxis, xAxis);
+
+	Matrix4x4 mat{};
+
+	// 回転部分（カメラの姿勢）
+	mat.m[0][0] = xAxis.x;
+	mat.m[0][1] = xAxis.y;
+	mat.m[0][2] = xAxis.z;
+	mat.m[0][3] = -Dot(xAxis, eye);
+
+	mat.m[1][0] = yAxis.x;
+	mat.m[1][1] = yAxis.y;
+	mat.m[1][2] = yAxis.z;
+	mat.m[1][3] = -Dot(yAxis, eye);
+
+	mat.m[2][0] = zAxis.x;
+	mat.m[2][1] = zAxis.y;
+	mat.m[2][2] = zAxis.z;
+	mat.m[2][3] = -Dot(zAxis, eye);
+
+	// 最下行（同次座標）
+	mat.m[3][0] = 0.0f;
+	mat.m[3][1] = 0.0f;
+	mat.m[3][2] = 0.0f;
+	mat.m[3][3] = 1.0f;
+
+	return mat;
 }
