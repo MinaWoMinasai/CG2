@@ -8,8 +8,6 @@
 #pragma comment(lib, "dxgi.lib")
 #include <cassert>
 #include <filesystem>
-#include <fstream>
-#include <sstream>
 #include <chrono>
 #include <dxgidebug.h>
 #pragma comment(lib, "dxguid.lib")
@@ -19,11 +17,6 @@
 #include <dbghelp.h>
 #pragma comment(lib, "Dbghelp.lib")
 #include <strsafe.h>
-#include "externals/imgui/imgui.h"
-#include "externals/imgui/imgui_impl_dx12.h"
-#include "externals/imgui/imgui_impl_win32.h"
-#include "externals/DirectXTex/DirectXTex.h"
-#include "externals/DirectXTex/d3dx12.h"
 #include <vector>
 #define _USE_MATH_DEFINES
 #include "math.h"
@@ -36,60 +29,17 @@
 #include <dinput.h>
 #pragma comment(lib, "dinput8.lib")
 #pragma comment(lib, "dxguid.lib")
-#include <mfapi.h>
-#include <mfidl.h>
-#include <mfreadwrite.h>
 #include "Input.h"
 #include "debugCamera.h"
-
-#pragma comment(lib, "Mf.lib")
-#pragma comment(lib, "mfplat.lib")
-#pragma comment(lib, "Mfreadwrite.lib")
-#pragma comment(lib, "mfuuid.lib")
+#include "Audio.h"
+#include "Window.h"
+#include "LogWrite.h"
+#include "CompileShader.h"
 
 float Rand(float min, float max) {
 	static std::mt19937 rng(std::random_device{}()); // 一度だけ初期化
 	std::uniform_real_distribution<float> dist(min, max);
 	return dist(rng);
-}
-
-extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
-
-std::wstring ConvertString(const std::string& str) {
-	if (str.empty()) {
-		return std::wstring();
-	}
-
-	auto sizeNeeded = MultiByteToWideChar(CP_UTF8, 0, reinterpret_cast<const char*>(&str[0]), static_cast<int>(str.size()), NULL, 0);
-	if (sizeNeeded == 0) {
-		return std::wstring();
-	}
-	std::wstring result(sizeNeeded, 0);
-	MultiByteToWideChar(CP_UTF8, 0, reinterpret_cast<const char*>(&str[0]), static_cast<int>(str.size()), &result[0], sizeNeeded);
-	return result;
-}
-
-std::string ConvertString(const std::wstring& str) {
-	if (str.empty()) {
-		return std::string();
-	}
-
-	auto sizeNeeded = WideCharToMultiByte(CP_UTF8, 0, str.data(), static_cast<int>(str.size()), NULL, 0, NULL, NULL);
-	if (sizeNeeded == 0) {
-		return std::string();
-	}
-	std::string result(sizeNeeded, 0);
-	WideCharToMultiByte(CP_UTF8, 0, str.data(), static_cast<int>(str.size()), result.data(), sizeNeeded, NULL, NULL);
-	return result;
-}
-
-void Log(const std::string& message) {
-	OutputDebugStringA(message.c_str());
-}
-
-void Log(std::ostream& os, const std::string& message) {
-	os << message << std::endl;
-	OutputDebugStringA(message.c_str());
 }
 
 struct ChunkHeader
@@ -121,7 +71,6 @@ struct D3DResouceLeakCheaker {
 			debug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_ALL);
 			debug->ReportLiveObjects(DXGI_DEBUG_APP, DXGI_DEBUG_RLO_ALL);
 			debug->ReportLiveObjects(DXGI_DEBUG_D3D12, DXGI_DEBUG_RLO_ALL);
-			Log("Success resouces leak cheak");
 		}
 	}
 };
@@ -151,7 +100,6 @@ Microsoft::WRL::ComPtr<ID3D12Resource> CreateBufferResource(Microsoft::WRL::ComP
 	assert(SUCCEEDED(hr));
 
 	return vertexResource;
-
 }
 
 // DescriptorHeapの作成
@@ -183,79 +131,14 @@ D3D12_GPU_DESCRIPTOR_HANDLE GetGPUDescriptorHandle(Microsoft::WRL::ComPtr<ID3D12
 	return handleGPU;
 }
 
-IDxcBlob* CompileShader(
-	// CompilerするShaderファイルへのパス
-	const std::wstring& filePath,
-	// Compilerに使用するProfile
-	const wchar_t* profile,
-	// 初期化で生成したものを3つ
-	IDxcUtils* dxcUtils,
-	IDxcCompiler3* dxcCompiler,
-	IDxcIncludeHandler* includeHandler) {
-
-	Log(ConvertString(std::format(L"Begin CompileShader, path:{}, profile:{}\n,", filePath, profile)));
-	// hlslファイルを読む
-	IDxcBlobEncoding* shaderSource = nullptr;
-	HRESULT hr = dxcUtils->LoadFile(filePath.c_str(), nullptr, &shaderSource);
-	// 読めなかったら止める
-	assert(SUCCEEDED(hr));
-	// 読み込んだファイルの内容を設定する
-	DxcBuffer shaderSourceBuffer;
-	shaderSourceBuffer.Ptr = shaderSource->GetBufferPointer();
-	shaderSourceBuffer.Size = shaderSource->GetBufferSize();
-	shaderSourceBuffer.Encoding = DXC_CP_UTF8; // UTF8の文字コードであることを確認
-
-	LPCWSTR arguments[] = {
-		filePath.c_str(), // コンパイル対象のhlslファイル名
-		L"-E", L"main", // エントリーポイントの指定。基本的にmain以外にはしない
-		L"-T",profile, // ShaderProfileの設定
-		L"-Zi", L"-Qembed_debug", // デバッグ陽男情報を埋め込む
-		L"-Od", // 最適化を外しておく
-		L"-Zpr" // メモリレイアウトは行優先
-	};
-	// 実際にShaderをコンパイルする
-	IDxcResult* shaderResult = nullptr;
-	hr = dxcCompiler->Compile(
-		&shaderSourceBuffer, // 読み込んだファイル
-		arguments, // コンパイルオプション
-		_countof(arguments), // コンパイルオプションの数
-		includeHandler, // includeが含まれた諸々
-		IID_PPV_ARGS(&shaderResult) // コンパイル結果
-	);
-	// コンパイルエラーではなくdxcが起動できないなど致命的な状況
-	assert(SUCCEEDED(hr));
-
-	// 警告・エラーが出てたらログに出して止める
-	IDxcBlobUtf8* shaderError = nullptr;
-	shaderResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&shaderError), nullptr);
-	if (shaderError != nullptr && shaderError->GetStringLength() != 0) {
-		Log(shaderError->GetStringPointer());
-		// 警告・エラーダメ絶対
-		assert(false);
-	}
-
-	// コンパイル結果から実行用にバイナリ部分を取得
-	IDxcBlob* shaderBlob = nullptr;
-	hr = shaderResult->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&shaderBlob), nullptr);
-	assert(SUCCEEDED(hr));
-
-	// 成功したログを出す
-	Log(ConvertString(std::format(L"Compile Succeeded, path;{}, profile:{}\n", filePath, profile)));
-	// もう使わないリソース
-	shaderSource->Release();
-	shaderResult->Release();
-	// 実行用のバイナリを返却
-	return shaderBlob;
-
-}
-
 // テクスチャデータを読む
 DirectX::ScratchImage LoadTexture(const std::string& filePath)
 {
 	// テクスチャファイルを読んでプログラムで扱えるようにする
 	DirectX::ScratchImage image{};
-	std::wstring filePathW = ConvertString(filePath);
-	Log("Loaded texture file : " + filePath);
+	LogWrite log;
+	std::wstring filePathW = log.ConvertString(filePath);
+	log.Log("Loaded texture file : " + filePath);
 	HRESULT hr = DirectX::LoadFromWICFile(filePathW.c_str(), DirectX::WIC_FLAGS_FORCE_SRGB, nullptr, image);
 	assert(SUCCEEDED(hr));
 
@@ -266,7 +149,6 @@ DirectX::ScratchImage LoadTexture(const std::string& filePath)
 
 	// ミップチップ付きのデータを返す
 	return mipImages;
-
 }
 
 Microsoft::WRL::ComPtr<ID3D12Resource> CreateTextureResource(Microsoft::WRL::ComPtr<ID3D12Device>& device, const DirectX::TexMetadata& metadata)
@@ -434,11 +316,6 @@ ModelData LoadObjFile(const std::string& directoryPath, const std::string& filen
 				Vector3 normal = normals[elementIndices[2] - 1];
 				triangle[faceVertex] = { position, texcoord, normal };
 
-				Log(std::format("index:{}\n", faceVertex));
-				Log(std::format("position.x:{}\n", positions[elementIndices[0] - 1].x));
-				Log(std::format("position.y:{}\n", positions[elementIndices[0] - 1].y));
-				Log(std::format("position.z:{}\n", positions[elementIndices[0] - 1].z));
-
 			}
 			// 頂点を逆順に登録することで、回り順を逆にする
 			modelData.vertices.push_back(triangle[2]);
@@ -499,26 +376,6 @@ private:
 
 };
 
-// ウィンドウプロシージャ
-LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
-
-	if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wparam, lparam)) {
-		return true;
-	}
-
-	// メッセージに応じてゲーム固有の処理を行う
-	switch (msg) {
-		//	ウィンドウが破棄された
-	case WM_DESTROY:
-		// OSに対して、アプリの終了を伝える
-		PostQuitMessage(0);
-		return 0;
-	}
-
-	//// 標準のメッセージ処置を行う
-	return DefWindowProc(hwnd, msg, wparam, lparam);
-}
-
 // Windowsアプリでのエントリーポイント(main関数)
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
@@ -535,68 +392,19 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	// mein関数始まってすぐに登録する
 	SetUnhandledExceptionFilter(ExportDump);
 
-	// ログのディテクトリを用意
-	std::filesystem::create_directory("logs");
-
-	// 現在時刻を取得(UTC時刻)
-	std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
-	// ログファイルの名前にコンマ何秒はいらないので、削って秒にする
-	std::chrono::time_point<std::chrono::system_clock, std::chrono::seconds>
-		nowSeconds = std::chrono::time_point_cast<std::chrono::seconds>(now);
-	// 日本時間(PCの設定時間に変換)
-	std::chrono::zoned_time localTime{ std::chrono::current_zone(), nowSeconds };
-	// formatを使って年月日_時分秒の文字列に変換
-	std::string dateString = std::format("{:%Y%m%d_%H%M%S}", localTime);
-	// 時刻を使ってファイル名を決定
-	std::string logFilePath = std::string("logs/") + dateString + ".log";
-	// ファイルを使って書き込み準備
-	std::ofstream logStream(logFilePath);
+	// ログの初期化
+	LogWrite log;
+	log.Initialize();
+	log.Log(log.GetLogStream(),"test");
+	
+	Window window;
+	window.Initialize();
 
 	WNDCLASS wc{};
-	// ウィンドウプロシージャ
-	wc.lpfnWndProc = WindowProc;
-	// ウィンドウクラス名
-	wc.lpszClassName = L"CG2WindouClass";
-	// インタンスバンドル
-	wc.hInstance = GetModuleHandle(nullptr);
-	// カーソル
-	wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
+	wc = window.GetWindowClass();
 
-	// ウィンドウクラスを登録する
-	RegisterClass(&wc);
-
-	// ウィンドウサイズを表す構造体にクライアント領域を入れる
-	RECT wrc = { 0,0,kClientWidth, kClientHeight };
-
-	// クライアント領域を元に実際のサイズにwrcを変更してもらう
-	AdjustWindowRect(&wrc, WS_OVERLAPPEDWINDOW, false);
-
-	// ウィンドウの生成
-	HWND hwnd = CreateWindow(
-		wc.lpszClassName,
-		L"CG2",
-		WS_OVERLAPPEDWINDOW,
-		CW_USEDEFAULT,
-		CW_USEDEFAULT,
-		wrc.right - wrc.left,
-		wrc.bottom - wrc.top,
-		nullptr,
-		nullptr,
-		wc.hInstance,
-		nullptr);
-
-#ifdef _DEBUG
-	Microsoft::WRL::ComPtr<ID3D12Debug1> debugComtroller = nullptr;
-	if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugComtroller)))) {
-		// デバッグレイヤーを有効化する
-		debugComtroller->EnableDebugLayer();
-		// さらにGPU側でもチェックを行うようにする
-		debugComtroller->SetEnableGPUBasedValidation(TRUE);
-	}
-#endif
-
-	// ウィンドウを表示する
-	ShowWindow(hwnd, SW_SHOW);
+	HWND hwnd;
+	hwnd = window.GetHwnd();
 
 	// HRESULTはWindows系のエラーコードであり。
 	// 関数が成功したかどうかをSUCCEEDEDマクロで判定できる
@@ -618,7 +426,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		// ソフトウェアアダプタでなければ採用!
 		if (!(adapterDesc.Flags & DXGI_ADAPTER_FLAG3_SOFTWARE)) {
 			// 採用したアダプタの情報をログに出力。wstringのほうなので注意
-			Log(ConvertString(std::format(L"Use Adapter:{}\n", adapterDesc.Description)));
+			//Log(ConvertString(std::format(L"Use Adapter:{}\n", adapterDesc.Description)));
 			break;
 		}
 		useAdapter = nullptr; // ソフトウェアアダプタの場合は見なかったことにする
@@ -638,14 +446,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		// 指定した操縦レベルでデバイスが生成できたかを確認
 		if (SUCCEEDED(hr)) {
 			// 生成できたのでログ出力を行ってループを抜ける
-			Log(std::format("FeatureLevel : {}\n", featrueLevelStrings[i]));
+			//Log(std::format("FeatureLevel : {}\n", featrueLevelStrings[i]));
 			break;
 		}
 	}
 	// デバイスの生成が上手くいかなかったので起動できない
 	assert(device != nullptr);
-	Log("Complete create D3D12Device!!!\n");// 初期化完了のログを出す
-
+	//Log("Complete create D3D12Device!!!\n");// 初期化完了のログを出す
 	// DirectInputの初期化
 	IDirectInput8* directInput = nullptr;
 	hr = DirectInput8Create(
@@ -864,7 +671,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	hr = D3D12SerializeRootSignature(&descriptionRootSignature,
 		D3D_ROOT_SIGNATURE_VERSION_1, &signatureBlob, &errorBlob);
 	if (FAILED(hr)) {
-		Log(reinterpret_cast<char*> (errorBlob->GetBufferPointer()));
+		log.Log(reinterpret_cast<char*> (errorBlob->GetBufferPointer()));
 		assert(false);
 	}
 	// バイナリをもとに生成
@@ -906,12 +713,14 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	// 三角形のなかを塗りつぶす
 	rasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID;
 
+	CompileShader compileShader;
+
 	// Shaderをコンパイルする
-	IDxcBlob* vertexShaderBlob = CompileShader(L"Object3d.VS.hlsl",
+	IDxcBlob* vertexShaderBlob = compileShader.Initialize(L"Object3d.VS.hlsl",
 		L"vs_6_0", dxcUtils, dxcCompiler, includeHandler);
 	assert(vertexShaderBlob != nullptr);
 
-	IDxcBlob* pixelShaderBlob = CompileShader(L"Object3d.PS.hlsl",
+	IDxcBlob* pixelShaderBlob = compileShader.Initialize(L"Object3d.PS.hlsl",
 		L"ps_6_0", dxcUtils, dxcCompiler, includeHandler);
 	assert(pixelShaderBlob != nullptr);
 
@@ -946,7 +755,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	const uint32_t kSubdivision = 16; // 分割数
 
 	// モデル読み込み
-	ModelData modelData = LoadObjFile("resources", "plane.obj");
+	ModelData modelData = LoadObjFile("resources", "axis.obj");
 	// 頂点リソースを作る
 	Microsoft::WRL::ComPtr<ID3D12Resource> vertexResource = CreateBufferResource(device, sizeof(VertexData) * modelData.vertices.size());
 
@@ -1186,13 +995,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	bool useMonsterBall = true;
 
-	Microsoft::WRL::ComPtr<IXAudio2> xAudio2;
-	IXAudio2MasteringVoice* masterVoice;
-
-	// XAudioエンジンのインスタンスを生成
-	hr = XAudio2Create(&xAudio2, 0, XAUDIO2_DEFAULT_PROCESSOR);
-	hr = xAudio2->CreateMasteringVoice(&masterVoice);
-
 	// キーの配列
 	BYTE key[256] = {};
 	BYTE preKey[256] = {};
@@ -1200,76 +1002,18 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	// マウスの状態を格納する構造体
 	DIMOUSESTATE mouseState;
 	DIMOUSESTATE preMouseState;
-
-	// ソースリーダーの作成
-	IMFSourceReader* pMFSourceReader{ nullptr };
-	MFCreateSourceReaderFromURL(L"resources/BGM.mp3", NULL, &pMFSourceReader);
 	
-	// メディアタイプの取得
-	IMFMediaType* pMFMediaType{ nullptr };
-	MFCreateMediaType(&pMFMediaType);
-	pMFMediaType->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Audio);
-	pMFMediaType->SetGUID(MF_MT_SUBTYPE, MFAudioFormat_PCM);
-	pMFSourceReader->SetCurrentMediaType(MF_SOURCE_READER_FIRST_AUDIO_STREAM, nullptr, pMFMediaType);
+	DebugCamera debugCamera;
 
-	pMFMediaType->Release();
-	pMFMediaType = nullptr;
-	pMFSourceReader->GetCurrentMediaType(MF_SOURCE_READER_FIRST_AUDIO_STREAM, &pMFMediaType);
- 
-	// オーディオデータ形式の作成
-	WAVEFORMATEX* waveFormat{ nullptr };
-	MFCreateWaveFormatExFromMFMediaType(pMFMediaType, &waveFormat, nullptr);
-	
-	// データの読み込み
-	std::vector<BYTE> mediaData;
-	while (true)
-	{
-		IMFSample* pMFSample{ nullptr };
-		DWORD dwStreamFlags{ 0 };
-		pMFSourceReader->ReadSample(MF_SOURCE_READER_FIRST_AUDIO_STREAM, 0, nullptr, &dwStreamFlags, nullptr, &pMFSample);
-
-		if (dwStreamFlags & MF_SOURCE_READERF_ENDOFSTREAM)
-		{
-			break;
-		}
-
-		IMFMediaBuffer* pMFMediaBuffer{ nullptr };
-		pMFSample->ConvertToContiguousBuffer(&pMFMediaBuffer);
-
-		BYTE* pBuffer{ nullptr };
-		DWORD cbCurrentLength{ 0 };
-		pMFMediaBuffer->Lock(&pBuffer, nullptr, &cbCurrentLength);
-
-		mediaData.resize(mediaData.size() + cbCurrentLength);
-		memcpy(mediaData.data() + mediaData.size() - cbCurrentLength, pBuffer, cbCurrentLength);
-
-		pMFMediaBuffer->Unlock();
-
-		pMFMediaBuffer->Release();
-		pMFSample->Release();
-	}
-
-	// XAudio2で再生
-	IXAudio2SourceVoice* pSourceVoice{ nullptr };
-	xAudio2->CreateSourceVoice(&pSourceVoice, waveFormat);
-
-	XAUDIO2_BUFFER buffer{ 0 };
-	buffer.pAudioData = mediaData.data();
-	buffer.Flags = XAUDIO2_END_OF_STREAM;
-	buffer.AudioBytes = sizeof(BYTE) * static_cast<UINT32>(mediaData.size());
-	pSourceVoice->SubmitSourceBuffer(&buffer);
-	
-	pSourceVoice->Start();
-
-	// デバッグカメラ
-	DebugCamera* debugCamera;
-	debugCamera = new DebugCamera();
+	Audio audio;
+	audio.Initialize();
+	audio.LoadAudio(L"bgm", L"resources/BGM.mp3");
+	audio.playAudio(L"bgm");
+	audio.LoadAudio(L"bgm2", L"resources/Alarm01.wav");
+	audio.playAudio(L"bgm2");
 
 	MSG msg{};
-#ifdef _DEBUG
-	// メインループ開始
-	Log("Starting main loop\n");
-#endif 
+
 	// ウィンドウの×ボタンが押されるまでループ
 	while (msg.message != WM_QUIT) {
 
@@ -1291,7 +1035,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			mouse->GetDeviceState(sizeof(DIMOUSESTATE), &mouseState);
 			
 			// デバッグカメラ
-			debugCamera->Update(mouseState);
+			debugCamera.Update(mouseState);
 
 			ImGui_ImplDX12_NewFrame();
 			ImGui_ImplWin32_NewFrame();
@@ -1331,7 +1075,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			transformationMatrixDataSprite->World = worldMatrixSprite;
 
 			Matrix4x4 worldMatrix = MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
-			Matrix4x4 viewMatrix = debugCamera->GetViewMatrix();
+			Matrix4x4 viewMatrix = debugCamera.GetViewMatrix();
 			Matrix4x4 projectionMatrix = MakePerspectiveForMatrix(0.45f, float(kClientWidth) / float(kClientHeight), 0.1f, 100.0f);
 			Matrix4x4 worldViewProjectionMatrix = Multiply(worldMatrix, Multiply(viewMatrix, projectionMatrix));
 			wvpData->WVP = worldViewProjectionMatrix;
@@ -1365,7 +1109,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			commandList->OMSetRenderTargets(1, &rtvHandles[backBufferIndex], false, &dsvHandle);
 			// 指定した色で画面全体をクリアする
 			float clearColor[] = { 0.1f, 0.25f, 0.5f, 1.0f };
-			//float clearColor[] = { 0.0f, 0.0f, 0.0f, 1.0f };
 			commandList->ClearRenderTargetView(rtvHandles[backBufferIndex], clearColor, 0, nullptr);
 			// 指定して深度で画面全体をクリアする
 			commandList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
@@ -1437,19 +1180,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		}
 	}
 
-	delete debugCamera;
-
 	// ImGuiの終了処理
 	ImGui_ImplDX12_Shutdown();
 	ImGui_ImplWin32_Shutdown();
 	ImGui::DestroyContext();
 	
-	// Media Foundasionの解放
-	CoTaskMemFree(waveFormat);
-	pMFMediaType->Release();
-	pMFSourceReader->Release();
-	MFShutdown();
-
 	CoUninitialize();
 	
 	CloseHandle(fenceEvent);
