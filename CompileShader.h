@@ -12,7 +12,7 @@ class CompileShader
 public:
 
 	/// <summary>
-	/// 
+	/// シェーダーをコンパイル
 	/// </summary>
 	/// <param name="filePath"></param>
 	/// <param name="profile"></param>

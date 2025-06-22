@@ -635,3 +635,9 @@ Matrix4x4 MakeLookAtMatrix(const Vector3& eye, const Vector3& target, const Vect
 
 	return mat;
 }
+
+float Rand(float min, float max) {
+	static std::mt19937 rng(std::random_device{}()); // 一度だけ初期化
+	std::uniform_real_distribution<float> dist(min, max);
+	return dist(rng);
+}

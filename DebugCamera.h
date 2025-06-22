@@ -34,5 +34,7 @@ private:
 	// カメラ
 	Matrix4x4 WorldMatrix_;
 	
+	Input input_;
+
 };
 

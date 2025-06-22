@@ -11,7 +11,7 @@ void DebugCamera::Update(const DIMOUSESTATE& mousestate)
 {
 
 	// 左クリックで回転
-	if (IsPressMouse(mousestate.rgbButtons[0])) {
+	if (input_.IsPress(mousestate.rgbButtons[0])) {
 
 		rotation_.x += mousestate.lY * velocity_.y;
 		rotation_.y += mousestate.lX * velocity_.x;
@@ -23,7 +23,7 @@ void DebugCamera::Update(const DIMOUSESTATE& mousestate)
 	matRot = Multiply(matRot, MakeRotateYMatrix(rotation_.y));
 
 	// 中クリックで左右移動
-	if (IsPressMouse(mousestate.rgbButtons[2])) {
+	if (input_.IsPress(mousestate.rgbButtons[2])) {
 
 		// 移動ベクトル
 		Vector3 velocity = { mousestate.lX * velocity_.x, mousestate.lY * velocity_.y, 0.0f };

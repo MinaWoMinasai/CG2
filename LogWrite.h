@@ -5,7 +5,6 @@
 #include <format>
 #include <filesystem>
 #include <fstream>
-#include <sstream>
 
 class LogWrite
 {

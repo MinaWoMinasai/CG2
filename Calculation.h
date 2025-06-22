@@ -1,90 +1,10 @@
 #pragma once
-#include <format>
+#include "Struct.h"
 #include <cassert>
 #include <random>
 
 const int32_t kClientWidth = 1280;
 const int32_t kClientHeight = 720;
-
-struct Vector2 {
-	float x;
-	float y;
-};
-
-struct Vector3 {
-	float x;
-	float y;
-	float z;
-};
-
-struct Vector4 {
-	float x;
-	float y;
-	float z;
-	float w;
-};
-
-struct Transform {
-	Vector3 scale;
-	Vector3 rotate;
-	Vector3 translate;
-};
-
-struct Actor {
-	Transform transform;
-	float speed;
-};
-
-// 3x3の行列
-struct Matrix3x3 {
-	float m[3][3];
-};
-
-// 4x4の行列
-struct Matrix4x4 {
-	float m[4][4];
-};
-
-struct VertexData {
-	Vector4 position;
-	Vector2 texcoord;
-	Vector3 normal;
-};
-
-// 球
-struct Sphere {
-	Vector3 center; // 中心点
-	float radius; // 半径
-};
-
-struct Material {
-	Vector4 color; 
-	int32_t ensbleLighting;
-	float padding[3];
-	Matrix4x4 uvTransform;
-};
-
-
-
-struct TransformationMatrix {
-	Matrix4x4 WVP;
-	Matrix4x4 World;
-};
-
-struct DirectionalLight {
-	Vector4 color; // ライトの色
-	Vector3 direction; // ライトの方向
-	float intensity; // ライトの光度
-};
-
-struct MaterialData {
-	std::string textureFilePath;
-};
-
-struct ModelData {
-	std::vector<VertexData> vertices;
-	MaterialData material;
-};
 
 const float pi = 3.14159265f;
 
@@ -155,3 +75,5 @@ Matrix4x4 MakeOrthographicMatrix(float left, float top, float right, float botto
 Matrix4x4 MakeViewportMatrix(float left, float top, float width, float height, float minDepth, float maxDepth);
 // LookAt行列
 Matrix4x4 MakeLookAtMatrix(const Vector3& eye, const Vector3& target, const Vector3& up);
+
+float Rand(float min, float max);
