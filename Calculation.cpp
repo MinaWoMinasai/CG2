@@ -597,43 +597,31 @@ Matrix4x4 MakeViewportMatrix(float left, float top, float width, float height, f
 
 	return result;
 }
-
 Matrix4x4 MakeLookAtMatrix(const Vector3& eye, const Vector3& target, const Vector3& up)
 {
-	// カメラの前方向（Z軸、逆方向に向くので eye - target）
-	Vector3 zAxis = Normalize(Subtract(eye, target));
+	// カメラの前方向（Z軸）を計算（正規化）
+	Vector3 zAxis = Normalize(Subtract(target, eye));
 
-	// カメラの右方向（X軸）: up × z
+	// カメラの右方向（X軸）を計算（正規化）
 	Vector3 xAxis = Normalize(Cross(up, zAxis));
 
-	// カメラの上方向（Y軸）: z × x
+	// カメラの上方向（Y軸）を再計算（直交ベクトル）
 	Vector3 yAxis = Cross(zAxis, xAxis);
 
-	Matrix4x4 mat{};
+	// 平行移動成分（逆行列）
+	float tx = -Dot(xAxis, eye);
+	float ty = -Dot(yAxis, eye);
+	float tz = -Dot(zAxis, eye);
 
-	// 回転部分（カメラの姿勢）
-	mat.m[0][0] = xAxis.x;
-	mat.m[0][1] = xAxis.y;
-	mat.m[0][2] = xAxis.z;
-	mat.m[0][3] = -Dot(xAxis, eye);
+	// ビュー行列を構築
+	Matrix4x4 viewMatrix = {
+		xAxis.x, yAxis.x, zAxis.x, 0.0f,
+		xAxis.y, yAxis.y, zAxis.y, 0.0f,
+		xAxis.z, yAxis.z, zAxis.z, 0.0f,
+		tx,      ty,      tz,      1.0f
+	};
 
-	mat.m[1][0] = yAxis.x;
-	mat.m[1][1] = yAxis.y;
-	mat.m[1][2] = yAxis.z;
-	mat.m[1][3] = -Dot(yAxis, eye);
-
-	mat.m[2][0] = zAxis.x;
-	mat.m[2][1] = zAxis.y;
-	mat.m[2][2] = zAxis.z;
-	mat.m[2][3] = -Dot(zAxis, eye);
-
-	// 最下行（同次座標）
-	mat.m[3][0] = 0.0f;
-	mat.m[3][1] = 0.0f;
-	mat.m[3][2] = 0.0f;
-	mat.m[3][3] = 1.0f;
-
-	return mat;
+	return viewMatrix;
 }
 
 float Rand(float min, float max) {

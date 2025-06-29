@@ -112,7 +112,7 @@ Microsoft::WRL::ComPtr<ID3D12Resource> Texture::CreateDepthStencilResouce(Micros
 
 }
 
-Microsoft::WRL::ComPtr<ID3D12Resource> Texture::UploadData(Microsoft::WRL::ComPtr<ID3D12Resource>& texture, const DirectX::ScratchImage& mipImages, Microsoft::WRL::ComPtr<ID3D12Device>& device, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>& commandList)
+Microsoft::WRL::ComPtr<ID3D12Resource> Texture::UploadData(Microsoft::WRL::ComPtr<ID3D12Resource>& texture, const DirectX::ScratchImage& mipImages, Microsoft::WRL::ComPtr<ID3D12Device>& device, const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>& commandList)
 {
 
 	std::vector<D3D12_SUBRESOURCE_DATA> subresources;

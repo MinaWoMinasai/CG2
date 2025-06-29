@@ -1,7 +1,12 @@
 #pragma once
+#define NOMINMAX
 #include "Calculation.h"
 #include <dinput.h>
 #include "Input.h"
+#include "algorithm"
+#include <DirectXMath.h>
+#include "externals/imgui/imgui.h"
+
 
 class DebugCamera
 {
@@ -16,7 +21,7 @@ public:
 	/// <summary>
 	/// 更新
 	/// </summary>
-	void Update(const DIMOUSESTATE& mousestate);
+	void Update(const DIMOUSESTATE& mousestate, std::span<const BYTE> key);
 
 	Matrix4x4 GetViewMatrix() { return viewMatrix_; }
 
@@ -36,5 +41,9 @@ private:
 	
 	Input input_;
 
+	float distance = 10.0f;             // 注視点との距離（ズーム）
+	float theta;                // 横回転（経度）
+	float phi = 0.01f;                  // 縦回転（緯度）
+	Vector3 target;             // 注視点のワールド座標
 };
 

@@ -77,3 +77,17 @@ Matrix4x4 MakeViewportMatrix(float left, float top, float width, float height, f
 Matrix4x4 MakeLookAtMatrix(const Vector3& eye, const Vector3& target, const Vector3& up);
 
 float Rand(float min, float max);
+
+// 演算子オーバーロード
+inline Vector3 operator+(const Vector3& v1, const Vector3& v2) { return Add(v1, v2); }
+inline Vector3 operator-(const Vector3& v1, const Vector3& v2) { return Subtract(v1, v2); }
+inline Vector3 operator*(const float& s, const Vector3& v) { return Multiply(s, v); }
+inline Vector3 operator*(const Vector3& v, const float& s) { return Multiply(s, v); }
+inline Vector3 operator/(const Vector3& v, const float& s) { return Multiply(1.0f / s, v); }
+inline Matrix4x4 operator+(const Matrix4x4& m1, const Matrix4x4& m2) { return Add(m1, m2); }
+inline Matrix4x4 operator-(const Matrix4x4& m1, const Matrix4x4& m2) { return Subtract(m1, m2); }
+inline Matrix4x4 operator*(const Matrix4x4& m1, const Matrix4x4& m2) { return Multiply(m1, m2); }
+
+// 単項演算子
+inline Vector3 operator-(const Vector3& v) { return { -v.x, -v.y, -v.z }; }
+inline Vector3 operator+(const Vector3& v) { return v; }

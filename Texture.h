@@ -26,7 +26,7 @@ public:
 	Microsoft::WRL::ComPtr<ID3D12Resource> CreateDepthStencilResouce(Microsoft::WRL::ComPtr<ID3D12Device>& device, int32_t width, int32_t height);
 
 	[[nodiscard]]
-	Microsoft::WRL::ComPtr<ID3D12Resource> UploadData(Microsoft::WRL::ComPtr<ID3D12Resource>& texture, const DirectX::ScratchImage& mipImages, Microsoft::WRL::ComPtr<ID3D12Device>& device, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>& commandList);
+	Microsoft::WRL::ComPtr<ID3D12Resource> UploadData(Microsoft::WRL::ComPtr<ID3D12Resource>& texture, const DirectX::ScratchImage& mipImages, Microsoft::WRL::ComPtr<ID3D12Device>& device, const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>& commandList);
 
 
 };

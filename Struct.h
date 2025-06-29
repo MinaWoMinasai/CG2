@@ -2,6 +2,9 @@
 #include <format>
 #include <dxgi1_6.h>
 #include <vector>
+#include <wrl.h>
+#include <d3d12.h>
+
 
 struct Vector2 {
 	float x;
@@ -12,6 +15,12 @@ struct Vector3 {
 	float x;
 	float y;
 	float z;
+
+	inline Vector3& operator*=(float s) { x *= s; y *= s; z *= s; return *this; }
+	inline Vector3& operator-=(const Vector3& v) { x -= v.x; y -= v.y; z -= v.z; return *this; }
+	inline Vector3& operator+=(const Vector3& v) { x += v.x; y += v.y; z += v.z; return *this; }
+	inline Vector3& operator/=(float s) { x /= s; y /= s; z /= s; return *this; }
+
 };
 
 struct Vector4 {
@@ -99,4 +108,10 @@ struct FormatChunk
 {
 	ChunkHeader chunk; // "fmt"
 	WAVEFORMATEX fmt; // 波形フォーマット
+};
+
+struct Block {
+	Transform transform;
+	Microsoft::WRL::ComPtr<ID3D12Resource> wvpResource;
+	TransformationMatrix* wvpData = nullptr;
 };

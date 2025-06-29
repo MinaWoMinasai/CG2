@@ -7,10 +7,10 @@
 #include "externals/imgui/imgui.h"
 #include "externals/imgui/imgui_impl_dx12.h"
 #include "externals/imgui/imgui_impl_win32.h"
-#include <dxgi1_6.h>
 #include <filesystem>
 #include <chrono>
 #include <dxgidebug.h>
+#include <dxgi1_6.h>
 
 class Renderer {
 public:
@@ -50,7 +50,7 @@ public:
     void SetViewport(D3D12_VIEWPORT view) { viewport = view; }
     void SetScissorRect(D3D12_RECT rect) { scissorRect = rect; }
     void SetFenceValue(UINT64 value) { fenceValue = value; }
-    void SetSwapChain(Microsoft::WRL::ComPtr<IDXGISwapChain4>& chain) { swapChain = chain; }
+    void SetSwapChain(const Microsoft::WRL::ComPtr<IDXGISwapChain4>& chain) { swapChain = chain; }
 
 private:
     void Transition(D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES after);
