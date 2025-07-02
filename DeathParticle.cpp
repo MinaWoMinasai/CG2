@@ -13,9 +13,9 @@ void DeathParticles::Initialize(Vector3& position, Microsoft::WRL::ComPtr<ID3D12
 
 void DeathParticles::Update() {  
 
-   //if (isFinished_) {  
-   //    return;  
-   //}  
+   if (isFinished_) {  
+       return;  
+   }  
 
    for (uint32_t i = 0; i < kNumParticles; i++) {  
        // 基本となる速度ベクトル  
@@ -44,9 +44,9 @@ void DeathParticles::Update() {
 void DeathParticles::Draw(Renderer renderer, DebugCamera debugCamera) {  
 
    // 終了なら何もしない  
-   //if (isFinished_) {  
-   //    return;  
-   //}  
+   if (isFinished_) {  
+       return;  
+   }  
 
    for (auto& particle : worldTransforms_) {
            particle.model.Draw(renderer, particle.transform, debugCamera.GetViewMatrix());

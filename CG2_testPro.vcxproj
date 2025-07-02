@@ -101,6 +101,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClCompile Include="DebugCamera.cpp" />
     <ClCompile Include="DebugLayer.cpp" />
     <ClCompile Include="Descriptor.cpp" />
+    <ClCompile Include="Draw.cpp" />
     <ClCompile Include="Dump.cpp" />
     <ClCompile Include="Easing.cpp" />
     <ClCompile Include="Enemy.cpp" />
@@ -159,6 +160,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClInclude Include="DebugCamera.h" />
     <ClInclude Include="DebugLayer.h" />
     <ClInclude Include="Descriptor.h" />
+    <ClInclude Include="Draw.h" />
     <ClInclude Include="Dump.h" />
     <ClInclude Include="Easing.h" />
     <ClInclude Include="Enemy.h" />

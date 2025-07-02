@@ -34,15 +34,14 @@ private:
 	// 射影行列
 	Matrix4x4 projectionMatrix_ = MakeOrthographicMatrix(0.0f, 0.0f, float(kClientWidth), float(kClientHeight), 0.0f, 100.0f);
 	// カメラの移動速度
-	Vector3 velocity_ = { 0.005f, 0.005f, 0.005f };
 	// カメラ
 	Matrix4x4 WorldMatrix_;
 	
 	Input input_;
 
+	// 移動・回転速度調整用
+	Vector3 velocity_ = { 0.01f, 0.01f, 0.1f }; // x=横回転速度, y=縦回転速度, z=ズーム速度
 	float distance = 50.0f;             // 注視点との距離（ズーム）
-	float theta = -3.150f;                // 横回転（経度）
-	float phi = 1.56f;                  // 縦回転（緯度）
 	Vector3 target = {19.0f, 12.3f, 0.15f};             // 注視点のワールド座標
 };
 

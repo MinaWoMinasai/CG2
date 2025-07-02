@@ -1,4 +1,5 @@
 #pragma once
+#define DIRECTINPUT_VERSION 0x0800
 #include "debugCamera.h"
 #include "Window.h"
 #include "LogWrite.h"

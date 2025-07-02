@@ -31,7 +31,7 @@ void GameScene::GeneratteBlocks()
 	// ブロックの生成
 	for (uint32_t i = 0; i < numBlockVirtical; ++i) {
 		for (uint32_t j = 0; j < numBlockHorizontal; ++j) {
-			
+
 			if (mapChipField_->GetMapChipTypeByIndex(j, i) == MapChipType::kBlock) {
 
 				Transform* worldTransform = new Transform();
@@ -73,8 +73,8 @@ void GameScene::CheakAllCollisions()
 
 		// AABB同士の当たり判定
 		if (IsCollision(aabb1, aabb2)) {
-			
-			if(!player->IsDead()) {
+
+			if (!player->IsDead()) {
 				// 自キャラの座標を取得
 				const Vector3& deathParticlesPosition = player->GetWorldPosition();
 
@@ -147,7 +147,10 @@ void GameScene::Update(std::span<const BYTE> key, DebugCamera debugCamera)
 {
 
 	// プレイヤーの更新
-	if (!player->IsDead()) {
+	if (player->IsDead()) {
+		// デスパーティクルの更新
+		deathParticles_->Update();
+	} else {
 		player->Update(key);
 	}
 
@@ -155,9 +158,6 @@ void GameScene::Update(std::span<const BYTE> key, DebugCamera debugCamera)
 	for (Enemy*& enemy : enemies_) {
 		enemy->Update();
 	}
-
-	// デスパーティクルの更新
-	deathParticles_->Update();
 
 	Matrix4x4 viewMatrix = debugCamera.GetViewMatrix();
 	Matrix4x4 projectionMatrix = MakePerspectiveForMatrix(0.45f, float(kClientWidth) / float(kClientHeight), 0.1f, 100.0f);
@@ -210,7 +210,7 @@ void GameScene::Draw(
 	for (Enemy*& enemy : enemies_) {
 		enemy->Draw(renderer, debugCamera);
 	}
-	
+
 	if (player->IsDead()) {
 		// デスパーティクルを描画
 		deathParticles_->Draw(renderer, debugCamera);
