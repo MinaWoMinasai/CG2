@@ -1,57 +1,6 @@
 #define DIRECTINPUT_VERSION 0x0800
-#include "Input.h"
-#include "debugCamera.h"
-#include "Audio.h"
-#include "Window.h"
-#include "LogWrite.h"
-#include "CompileShader.h"
-#include "LoadFile.h"
-#include "Dump.h"
-#include "Texture.h"
-#include "DebugLayer.h"
-#include "Renderer.h"
-#include "useAdapterDevice.h"
-#include "Command.h"
-#include "Descriptor.h"
-#include "InputDesc.h"
-#include "Root.h"
-#include "SwapChain.h"
-#include "State.h"
-#include "PSO.h"
-#include "Resource.h"
-#include "WindowScreenSize.h"
-#include "View.h"
+#include "Engine.h"
 #include "GameScene.h"
-
-struct D3DResouceLeakCheaker {
-	~D3DResouceLeakCheaker()
-	{
-		// リソースリークチェック
-		Microsoft::WRL::ComPtr<IDXGIDebug1> debug;
-		if (SUCCEEDED(DXGIGetDebugInterface1(0, IID_PPV_ARGS(&debug)))) {
-			debug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_ALL);
-			debug->ReportLiveObjects(DXGI_DEBUG_APP, DXGI_DEBUG_RLO_ALL);
-			debug->ReportLiveObjects(DXGI_DEBUG_D3D12, DXGI_DEBUG_RLO_ALL);
-		}
-	}
-};
-
-class ResourceObject {
-public:
-	ResourceObject(Microsoft::WRL::ComPtr<ID3D12Resource>& resource)
-		:resource_(resource)
-	{
-	}
-	~ResourceObject() {
-		if (resource_) {
-			resource_->Release();
-		}
-	}
-	Microsoft::WRL::ComPtr<ID3D12Resource> Get() { return resource_; };
-
-private:
-	Microsoft::WRL::ComPtr<ID3D12Resource> resource_;
-};
 
 // Windowsアプリでのエントリーポイント(main関数)
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
@@ -160,6 +109,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	const DirectX::TexMetadata metadataS = mipImagesS.GetMetadata();
 	Microsoft::WRL::ComPtr<ID3D12Resource> textureResourceS = texture.CreateResource(device, metadataS);
 	Microsoft::WRL::ComPtr<ID3D12Resource> intermediateResourceS = texture.UploadData(textureResourceS, mipImagesS, device, command.GetList());
+
 	// コマンドリストの内容を確定させるすべてのコマンドを積んでからCloseすること
 	hr = command.GetList()->Close();
 	assert(SUCCEEDED(hr));
@@ -242,10 +192,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	Audio audio;
 	audio.Initialize();
-	audio.LoadAudio(L"bgm", L"resources/BGM.mp3");
-	audio.playAudio(L"bgm");
-	audio.LoadAudio(L"bgm2", L"resources/Alarm01.wav");
-	audio.playAudio(L"bgm2");
+	//audio.LoadAudio(L"bgm", L"resources/BGM.mp3");
+	//audio.playAudio(L"bgm");
+	//audio.LoadAudio(L"bgm2", L"resources/Alarm01.wav");
+	//audio.playAudio(L"bgm2");
 
 	Renderer renderer;
 	renderer.SetDSVHandle(descriptor.GetDsvHeap()->GetCPUDescriptorHandleForHeapStart());
@@ -270,12 +220,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		2 // バックバッファ数
 	);
 
-	MSG msg{};
-
 	GameScene* gameScene = new GameScene;
+	gameScene->LoadModel(device, descriptor, command);
+	gameScene->Initialize(modelData, texture, device, descriptor, command);
 
-	gameScene->Initialize(modelData, texture, device);
-
+	MSG msg{};
 	// ウィンドウの×ボタンが押されるまでループ
 	while (msg.message != WM_QUIT) {
 
@@ -300,12 +249,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			ImGui::DragFloat3("scale", &transform.scale.x, 0.1f);
 			ImGui::DragFloat3("rotate", &transform.rotate.x, 0.1f);
 			ImGui::DragFloat3("translate", &transform.translate.x, 1.0f);
-			// 開発用UIの処理。実際に開発用のUIを出す場合はここをゲーム固有の処理に置き換える
-			ImGui::ShowDemoWindow();
-
-			// ImGuiの内部コマンドを生成する
-			ImGui::Render();
-
+			
 			Matrix4x4 worldMatrix = MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
 			Matrix4x4 viewMatrix = debugCamera.GetViewMatrix();
 			Matrix4x4 projectionMatrix = MakePerspectiveForMatrix(0.45f, float(kClientWidth) / float(kClientHeight), 0.1f, 100.0f);
@@ -313,7 +257,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			wvpData->WVP = worldViewProjectionMatrix;
 			wvpData->World = worldMatrix;
 
-			gameScene->Update(debugCamera);
+			gameScene->Update(input.GetKey(), debugCamera);
+			
+			// 開発用UIの処理。実際に開発用のUIを出す場合はここをゲーム固有の処理に置き換える
+			ImGui::ShowDemoWindow();
+
+			// ImGuiの内部コマンドを生成する
+			ImGui::Render();
 
 			UINT backBufferIndex = swapChain.GetList()->GetCurrentBackBufferIndex();
 			renderer.BeginFrame(backBufferIndex);
@@ -329,6 +279,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			);
 
 			gameScene->Draw(
+				debugCamera,
 				renderer,
 				nullptr,                          // IBV（インデックスなしの例）
 				materialResource->GetGPUVirtualAddress(),  // Material CBV

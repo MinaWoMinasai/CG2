@@ -7,6 +7,11 @@
 #include "DebugCamera.h"
 #include "Resource.h"
 #include "Texture.h"
+#include "Model.h"
+#include "Player.h"
+#include "Descriptor.h"
+#include "Enemy.h"
+#include "DeathParticle.h"
 
 class GameScene
 {
@@ -23,17 +28,22 @@ public:
     /// </summary>
     void GeneratteBlocks();
 
+    void LoadModel(Microsoft::WRL::ComPtr<ID3D12Device>& device, Descriptor descriptor, Command command);
+
+    // そうあたり判定を行う
+    void CheakAllCollisions();
+
     /// <summary>
     /// 初期化
     /// </summary>
-    void Initialize(ModelData modelData, Texture texture, Microsoft::WRL::ComPtr<ID3D12Device>& device);
+    void Initialize(ModelData modelData, Texture texture, Microsoft::WRL::ComPtr<ID3D12Device>& device, Descriptor descriptor, Command command);
 
     // 頂点初期化
 
     /// <summary>
     /// 更新
     /// </summary>
-    void Update(DebugCamera debugCamera);
+    void Update(std::span<const BYTE> key, DebugCamera debugCamera);
 
 	/// <summary>
 	/// 描画
@@ -48,6 +58,7 @@ public:
 	/// <param name="vertexCount"></param>
 	/// <param name="indexCount"></param>
 	void Draw(
+        DebugCamera debugCamera,
         Renderer renderer, 
         const D3D12_INDEX_BUFFER_VIEW* ibv,
         D3D12_GPU_VIRTUAL_ADDRESS materialCBV,
@@ -70,10 +81,18 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> wvpResource;
     TransformationMatrix* wvpData = nullptr;
 
+    // インスタンス
+    Player* player;
+    const int32_t kEnemyCount = 3;
+    std::list<Enemy*> enemies_;
+    DeathParticles* deathParticles_ = nullptr;
+
     // リソース
     Resource resource;
 
-
+    // モデル
+    Model* playerModel;
+    Model* enemyModel;
 
 };
 

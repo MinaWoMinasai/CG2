@@ -7,7 +7,6 @@
 #include <DirectXMath.h>
 #include "externals/imgui/imgui.h"
 
-
 class DebugCamera
 {
 
@@ -29,7 +28,7 @@ private:
 	// X,Y,Z軸回りのローカル回転角
 	Vector3 rotation_ = {0,0,0};
 	// ローカル座標
-	Vector3 translation_ = {0,0,-5.0f};
+	Vector3 translation_ = {19.0f,12.3f, 0.15f};
 	// ビュー行列
 	Matrix4x4 viewMatrix_ = MakeIdentity4x4();
 	// 射影行列
@@ -41,9 +40,9 @@ private:
 	
 	Input input_;
 
-	float distance = 10.0f;             // 注視点との距離（ズーム）
-	float theta;                // 横回転（経度）
-	float phi = 0.01f;                  // 縦回転（緯度）
-	Vector3 target;             // 注視点のワールド座標
+	float distance = 50.0f;             // 注視点との距離（ズーム）
+	float theta = -3.150f;                // 横回転（経度）
+	float phi = 1.56f;                  // 縦回転（緯度）
+	Vector3 target = {19.0f, 12.3f, 0.15f};             // 注視点のワールド座標
 };
 

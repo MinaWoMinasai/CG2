@@ -5,6 +5,13 @@ GameScene::~GameScene()
 {
 	worldTransformBlocks_.clear();
 	delete mapChipField_;
+	delete playerModel;
+	delete player;
+	delete enemyModel;
+	for (Enemy*& enemy : enemies_) {
+		delete enemy;
+	}
+	delete deathParticles_;
 }
 
 void GameScene::GeneratteBlocks()
@@ -40,8 +47,52 @@ void GameScene::GeneratteBlocks()
 	}
 }
 
-void GameScene::Initialize(ModelData modelData, Texture texture, Microsoft::WRL::ComPtr<ID3D12Device>& device)
+void GameScene::LoadModel(Microsoft::WRL::ComPtr<ID3D12Device>& device, Descriptor descriptor, Command command)
 {
+	// モデルの初期化と読み込み
+	playerModel = new Model;
+	playerModel->Initialize(device, descriptor);
+	playerModel->Load(command, "player2.obj", "player.png", 3);
+}
+
+void GameScene::CheakAllCollisions()
+{
+
+	// 自キャラと敵キャラのあたり判定
+
+	// 判定対象1と2の座標
+	AABB aabb1, aabb2;
+
+	// 自キャラの座標
+	aabb1 = player->GetAABB();
+
+	// 自キャラと敵弾すべてのあたり判定
+	for (Enemy* enemy : enemies_) {
+		// 敵弾の座標
+		aabb2 = enemy->GetAABB();
+
+		// AABB同士の当たり判定
+		if (IsCollision(aabb1, aabb2)) {
+			
+			if(!player->IsDead()) {
+				// 自キャラの座標を取得
+				const Vector3& deathParticlesPosition = player->GetWorldPosition();
+
+				// 自キャラの位置にデスパーティクルを生成
+				deathParticles_->SetPos(deathParticlesPosition);
+			}
+			// 自キャラの衝突時コールバックを呼び出す
+			player->OnCollision(enemy);
+			// 敵キャラの衝突時コールバックを呼び出す
+			enemy->OnCollision(player);
+
+		}
+	}
+}
+
+void GameScene::Initialize(ModelData modelData, Texture texture, Microsoft::WRL::ComPtr<ID3D12Device>& device, Descriptor descriptor, Command command)
+{
+
 	// 頂点バッファビュー作成
 	vertexBufferView = resource.CreateVBV(modelData, texture, device, vertexResource);
 
@@ -72,9 +123,42 @@ void GameScene::Initialize(ModelData modelData, Texture texture, Microsoft::WRL:
 			}
 		}
 	}
+
+	player = new Player;
+	// 座標をマップチップ番号で指定
+	Vector3 playerPosition = mapChipField_->GetMapChipPositionByIndex(3, 12);
+	player->Initialize(playerModel, { playerPosition });
+	player->SetMapChipField(mapChipField_);
+
+	// 敵の生成と初期化
+	for (int32_t i = 0; i < kEnemyCount; i++) {
+		Enemy* newEnemy = new Enemy();
+		Vector3 enemyPosition = mapChipField_->GetMapChipPositionByIndex(20, 13 + i * 2);
+		newEnemy->Initialize(enemyPosition, device, descriptor, command);
+		enemies_.push_back(newEnemy);
+	}
+
+	deathParticles_ = new DeathParticles;
+	deathParticles_->Initialize(playerPosition, device, descriptor, command);
+
 }
-void GameScene::Update(DebugCamera debugCamera)
+
+void GameScene::Update(std::span<const BYTE> key, DebugCamera debugCamera)
 {
+
+	// プレイヤーの更新
+	if (!player->IsDead()) {
+		player->Update(key);
+	}
+
+	// 敵の更新
+	for (Enemy*& enemy : enemies_) {
+		enemy->Update();
+	}
+
+	// デスパーティクルの更新
+	deathParticles_->Update();
+
 	Matrix4x4 viewMatrix = debugCamera.GetViewMatrix();
 	Matrix4x4 projectionMatrix = MakePerspectiveForMatrix(0.45f, float(kClientWidth) / float(kClientHeight), 0.1f, 100.0f);
 
@@ -90,9 +174,13 @@ void GameScene::Update(DebugCamera debugCamera)
 			block.wvpData->World = worldMatrix;
 		}
 	}
+	// あたり判定を行う
+	CheakAllCollisions();
+
 }
 
 void GameScene::Draw(
+	DebugCamera debugCamera,
 	Renderer renderer,
 	const D3D12_INDEX_BUFFER_VIEW* ibv,
 	D3D12_GPU_VIRTUAL_ADDRESS materialCBV,
@@ -117,4 +205,18 @@ void GameScene::Draw(
 			);
 		}
 	}
+
+	// 敵の描画
+	for (Enemy*& enemy : enemies_) {
+		enemy->Draw(renderer, debugCamera);
+	}
+	
+	if (player->IsDead()) {
+		// デスパーティクルを描画
+		deathParticles_->Draw(renderer, debugCamera);
+	} else {
+		// プレイヤーの描画
+		player->Draw(renderer, debugCamera);
+	}
+
 }

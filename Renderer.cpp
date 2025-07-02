@@ -43,7 +43,7 @@ void Renderer::DrawModel(
     ID3D12DescriptorHeap* heaps[] = { srvHeap };
     commandList->SetDescriptorHeaps(1, heaps);
 
-    commandList->SetGraphicsRootSignature(rootSignature); // ← 必須！
+    commandList->SetGraphicsRootSignature(rootSignature);
     commandList->SetPipelineState(graphicsPipelineState.Get()); // PSOを設定
     commandList->IASetVertexBuffers(0, 1, &vbv);
     if (ibv) commandList->IASetIndexBuffer(ibv);

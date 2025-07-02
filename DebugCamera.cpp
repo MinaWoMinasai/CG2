@@ -13,6 +13,7 @@ void DebugCamera::Update(const DIMOUSESTATE& mousestate, std::span<const BYTE> k
     ImGui::DragFloat("Distance", &distance, 0.1f, 100.0f);
     ImGui::DragFloat("Theta", &theta, 0.0f, DirectX::XM_2PI);
     ImGui::DragFloat("Phi", &phi, 0.01f, DirectX::XM_PI - 0.01f);
+    ImGui::DragFloat3("translate", &target.x, 0.01f);
     ImGui::End();
 
     if (input_.IsPress(mousestate.rgbButtons[2]) && input_.IsRelease(key[DIK_LSHIFT])) {
@@ -24,8 +25,8 @@ void DebugCamera::Update(const DIMOUSESTATE& mousestate, std::span<const BYTE> k
     if (input_.IsPress(mousestate.rgbButtons[2]) && input_.IsPress(key[DIK_LSHIFT])) {
         Vector3 right = { cosf(theta), 0, -sinf(theta) };
         Vector3 up = { 0, 1, 0 };
-        target = Add(target, Multiply((-mousestate.lX * velocity_.x), right));
-        target = Add(target, Multiply((-mousestate.lY * velocity_.y), right));
+        target = Add(target, Multiply((mousestate.lX * velocity_.x), right));
+        target = Add(target, Multiply((mousestate.lY * velocity_.y), up));
     }
 
     if (mousestate.lZ != 0) {
