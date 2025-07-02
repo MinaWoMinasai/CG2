@@ -37,8 +37,6 @@ bld/
 Dumps/
 logs/
 
-!resources/
-
 #Ignore imgui.ini
 imgui.ini
 
@@ -106,6 +104,9 @@ StyleCopReport.xml
 *.pidb
 *.svclog
 *.scc
+
+# Not ignore resoures
+!resources/
 
 # Chutzpah Test files
 _Chutzpah*
