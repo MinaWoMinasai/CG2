@@ -105,8 +105,8 @@ StyleCopReport.xml
 *.svclog
 *.scc
 
-# Not ignore Resoures
-!resources/
+# Not ignore Resoures/.obj
+!resources/**/*.obj
 
 # Chutzpah Test files
 _Chutzpah*
