@@ -37,7 +37,7 @@ bld/
 Dumps/
 logs/
 
-!resource/
+!resources/
 
 #Ignore imgui.ini
 imgui.ini
