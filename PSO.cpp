@@ -37,12 +37,48 @@ void PSO::Graphics()
 
 }
 
+void PSO::GraphicsLine()
+{
+
+	graphicsDescLine_.pRootSignature = root_.GetSignature().Get();// RootSignature
+	graphicsDescLine_.InputLayout = inputDesc_.GetLayout();// InputLayout
+	graphicsDescLine_.VS = { root_.GetVertexShaderBlob()->GetBufferPointer(),
+	root_.GetVertexShaderBlob()->GetBufferSize() };// VertexShader
+	graphicsDescLine_.PS = { root_.GetPixelShaderBlob()->GetBufferPointer(),
+	root_.GetPixelShaderBlob()->GetBufferSize() };// pixelShader
+	graphicsDescLine_.BlendState = state_.GetBlendDesc();// BlendState
+	graphicsDescLine_.RasterizerState = state_.GetRasterizerDesc();// RasterizerState
+	// 書き込むRTVの情報
+	graphicsDescLine_.NumRenderTargets = 1;
+	graphicsDescLine_.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+	// 利用するトロポジ(形状)のタイプ、線
+	graphicsDescLine_.PrimitiveTopologyType =
+		D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
+	// どのように画面に色を打ち込むかの設定
+	graphicsDescLine_.SampleDesc.Count = 1;
+	graphicsDescLine_.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
+	// DepthStencilの設定
+	graphicsDescLine_.DepthStencilState = state_.GetDepthStencilDesc();
+	graphicsDescLine_.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+
+}
+
 void PSO::Create(Microsoft::WRL::ComPtr<ID3D12Device>& device)
 {
 
 	// 実際に生成
 	HRESULT hr = device->CreateGraphicsPipelineState(&graphicsDesc_,
 		IID_PPV_ARGS(&graphicsState_));
+	assert(SUCCEEDED(hr));
+
+}
+
+void PSO::CreateLine(Microsoft::WRL::ComPtr<ID3D12Device>& device)
+{
+
+	// 実際に生成
+	HRESULT hr = device->CreateGraphicsPipelineState(&graphicsDescLine_,
+		IID_PPV_ARGS(&graphicsStateLine_));
 	assert(SUCCEEDED(hr));
 
 }

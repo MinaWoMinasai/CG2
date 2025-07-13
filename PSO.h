@@ -11,8 +11,10 @@ public:
 	void Initialize(Microsoft::WRL::ComPtr<ID3D12Device>& device, Command& command);
 
 	void Graphics();
+	void GraphicsLine();
 
 	void Create(Microsoft::WRL::ComPtr<ID3D12Device>& device);
+	void CreateLine(Microsoft::WRL::ComPtr<ID3D12Device>& device);
 
 	void Release();
 
@@ -31,7 +33,10 @@ public:
 private:
 
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC graphicsDesc_{};
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC graphicsDescLine_{};
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> graphicsState_ = nullptr;
+	Microsoft::WRL::ComPtr<ID3D12PipelineState> graphicsStateLine_ = nullptr;
+	
 	State state_;
 	InputDesc inputDesc_;
 	Root root_;

@@ -47,15 +47,15 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	// デバッグレイヤー
 	DebugLayer::EnableDebugLayer(device.Get());
-	
+
 	// コマンドリスト
 	Command command;
 	command.Initialize(device);
-	
+
 	SwapChain swapChain;
 	swapChain.Initialize(kClientWidth, kClientHeight);
-    swapChain.Create(dxgiFactory, command.GetQueue(), hwnd);
-	
+	swapChain.Create(dxgiFactory, command.GetQueue(), hwnd);
+
 	Descriptor descriptor;
 	descriptor.Initialize(device);
 
@@ -79,6 +79,149 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	// リソースを作成する
 	Resource resource;
 
+	struct Vertex {
+		Vector3 position;
+		Vector4 color;
+	};
+
+	D3D12_INPUT_ELEMENT_DESC gridInputLayout[] = {
+	{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,   0, 0,
+	  D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+	{ "COLOR",    0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12,
+	  D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+	};
+
+	D3D12_INPUT_LAYOUT_DESC inputLayoutDesc{};
+	inputLayoutDesc.pInputElementDescs = gridInputLayout;
+	inputLayoutDesc.NumElements = _countof(gridInputLayout);
+
+	CompileShader compileShader;
+
+	IDxcBlob* vertexShaderBlob = compileShader.Initialize(L"GridVS.hlsl",
+		L"vs_6_0", command.GetDxcUtils(), command.GetDxcCompiler(), command.GetIncludeHandler());
+	assert(vertexShaderBlob != nullptr);
+
+	IDxcBlob* pixelShaderBlob = compileShader.Initialize(L"GridPS.hlsl",
+		L"ps_6_0", command.GetDxcUtils(), command.GetDxcCompiler(), command.GetIncludeHandler());
+	assert(pixelShaderBlob != nullptr);
+
+	State state;
+	state.Initialize();
+
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC graphicsDesc{};
+	graphicsDesc.pRootSignature = pso.GetRootSignature().Get();// RootSignature
+	graphicsDesc.InputLayout = inputLayoutDesc;// InputLayout
+	graphicsDesc.VS = { vertexShaderBlob->GetBufferPointer(),
+	vertexShaderBlob->GetBufferSize() };// VertexShader
+	graphicsDesc.PS = { pixelShaderBlob->GetBufferPointer(),
+	pixelShaderBlob->GetBufferSize() };// pixelShader
+	graphicsDesc.BlendState = state.GetBlendDesc();// BlendState
+	graphicsDesc.RasterizerState = state.GetRasterizerDesc();// RasterizerState
+	// 書き込むRTVの情報
+	graphicsDesc.NumRenderTargets = 1;
+	graphicsDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+	// 利用するトロポジ(形状)のタイプ、三角形
+	graphicsDesc.PrimitiveTopologyType =
+		D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
+	// どのように画面に色を打ち込むかの設定
+	graphicsDesc.SampleDesc.Count = 1;
+	graphicsDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
+	// DepthStencilの設定
+	graphicsDesc.DepthStencilState = state.GetDepthStencilDesc();
+	graphicsDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+
+	// 実際に生成
+	Microsoft::WRL::ComPtr<ID3D12PipelineState> graphicsPipelineState = nullptr;
+	hr = device->CreateGraphicsPipelineState(&graphicsDesc,
+		IID_PPV_ARGS(&graphicsPipelineState));
+	assert(SUCCEEDED(hr));
+	std::vector<Vertex> gridLines;
+	const int gridHalfSize = 50;      // -50 〜 +50
+	const float spacing = 1.0f;
+
+	for (int i = -gridHalfSize; i <= gridHalfSize; ++i) {
+		Vector4 lineColor;
+
+		// 区切り線ごとの色分け（X軸固定 = Z方向の線）
+		if (i == 0) {
+			lineColor = { 1.0f, 0.0f, 0.0f, 1.0f }; // X軸（赤）
+		} else if (i % 10 == 0) {
+			lineColor = { 1.0f, 1.0f, 1.0f, 1.0f }; // 区切り（白）
+		} else {
+			lineColor = { 0.5f, 0.5f, 0.5f, 1.0f }; // 通常（グレー）
+		}
+
+		float x = i * spacing;
+		float zMin = -gridHalfSize * spacing;
+		float zMax = gridHalfSize * spacing;
+
+		// Z方向の線（Xを固定）
+		gridLines.push_back({ { x, 0.0f, zMin }, lineColor });
+		gridLines.push_back({ { x, 0.0f, zMax }, lineColor });
+	}
+
+	for (int i = -gridHalfSize; i <= gridHalfSize; ++i) {
+		Vector4 lineColor;
+
+		// 区切り線ごとの色分け（Z軸固定 = X方向の線）
+		if (i == 0) {
+			lineColor = { 0.0f, 0.0f, 1.0f, 1.0f }; // Z軸（青）
+		} else if (i % 10 == 0) {
+			lineColor = { 1.0f, 1.0f, 1.0f, 1.0f }; // 区切り（白）
+		} else {
+			lineColor = { 0.5f, 0.5f, 0.5f, 1.0f }; // 通常（グレー）
+		}
+
+		float z = i * spacing;
+		float xMin = -gridHalfSize * spacing;
+		float xMax = gridHalfSize * spacing;
+
+		// X方向の線（Zを固定）
+		gridLines.push_back({ { xMin, 0.0f, z }, lineColor });
+		gridLines.push_back({ { xMax, 0.0f, z }, lineColor });
+	}
+	// グリッド用の頂点リソースを作成
+	UINT vertexBufferSize = static_cast<UINT>(sizeof(Vertex) * gridLines.size());
+
+	// 1. リソース作成
+	Microsoft::WRL::ComPtr<ID3D12Resource> vertexBuffer;
+	Microsoft::WRL::ComPtr<ID3D12Resource> cameraBuffer;
+
+	CD3DX12_HEAP_PROPERTIES heapProps(D3D12_HEAP_TYPE_UPLOAD);
+	CD3DX12_RESOURCE_DESC bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize);
+	CD3DX12_RESOURCE_DESC resourceDesc = CD3DX12_RESOURCE_DESC::Buffer((sizeof(Matrix4x4) + 0xFF) & ~0xFF);
+
+	hr = device->CreateCommittedResource(
+		&heapProps,
+		D3D12_HEAP_FLAG_NONE,
+		&resourceDesc,
+		D3D12_RESOURCE_STATE_GENERIC_READ,
+		nullptr,
+		IID_PPV_ARGS(&cameraBuffer)
+	);
+	assert(SUCCEEDED(hr)); // 必ず成功チェック
+
+	device->CreateCommittedResource(
+		&heapProps,
+		D3D12_HEAP_FLAG_NONE,
+		&bufferDesc,
+		D3D12_RESOURCE_STATE_GENERIC_READ,
+		nullptr,
+		IID_PPV_ARGS(&vertexBuffer)
+	);
+
+	// 2. 転送
+	void* mapped = nullptr;
+	vertexBuffer->Map(0, nullptr, &mapped);
+	memcpy(mapped, gridLines.data(), vertexBufferSize);
+	vertexBuffer->Unmap(0, nullptr);
+
+	// 3. ビュー作成
+	D3D12_VERTEX_BUFFER_VIEW vbView{};
+	vbView.BufferLocation = vertexBuffer->GetGPUVirtualAddress();
+	vbView.SizeInBytes = vertexBufferSize;
+	vbView.StrideInBytes = sizeof(Vertex);
+
 	// 天球リソース
 	Microsoft::WRL::ComPtr <ID3D12Resource> vertexResourceSkydome;
 	D3D12_VERTEX_BUFFER_VIEW vertexBufferViewSkydome = resource.CreateVBV(modelSkydome, texture, device, vertexResourceSkydome);
@@ -96,7 +239,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	// 平行光源用のリソースを作る
 	Microsoft::WRL::ComPtr<ID3D12Resource> directionalLightResource = resource.CreatedirectionalLight(texture, device);
-	
+
 	WindowScreenSize windowScreenSize;
 	windowScreenSize.Initialize(kClientWidth, kClientHeight);
 
@@ -104,7 +247,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	DirectX::ScratchImage mipImages = texture.Load("resources/block.png");
 	const DirectX::TexMetadata metadata = mipImages.GetMetadata();
 	Microsoft::WRL::ComPtr<ID3D12Resource> textureResource = texture.CreateResource(device, metadata);
-    Microsoft::WRL::ComPtr<ID3D12Resource> intermediateResource = texture.UploadData(textureResource, mipImages, device, command.GetList());
+	Microsoft::WRL::ComPtr<ID3D12Resource> intermediateResource = texture.UploadData(textureResource, mipImages, device, command.GetList());
 	DirectX::ScratchImage mipImagesS = texture.Load("resources/uvChecker.png");
 	const DirectX::TexMetadata metadataS = mipImagesS.GetMetadata();
 	Microsoft::WRL::ComPtr<ID3D12Resource> textureResourceS = texture.CreateResource(device, metadataS);
@@ -115,7 +258,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	assert(SUCCEEDED(hr));
 
 	// GPUにコマンドリストの実行を行わせる
-	ID3D12CommandList* commandLists[] = { command.GetList().Get()};
+	ID3D12CommandList* commandLists[] = { command.GetList().Get() };
 	command.GetQueue()->ExecuteCommandLists(1, commandLists);
 
 	//GPUとOSに画面の交換を行うよう通知する
@@ -190,19 +333,12 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	DebugCamera debugCamera;
 
-	Audio audio;
-	audio.Initialize();
-	//audio.LoadAudio(L"bgm", L"resources/BGM.mp3");
-	//audio.playAudio(L"bgm");
-	//audio.LoadAudio(L"bgm2", L"resources/Alarm01.wav");
-	//audio.playAudio(L"bgm2");
-
 	Renderer renderer;
 	renderer.SetDSVHandle(descriptor.GetDsvHeap()->GetCPUDescriptorHandleForHeapStart());
 	renderer.SetSwapChainResources({ view.GetSwapChainResource()[0], view.GetSwapChainResource()[1] });
 	renderer.SetGraphicsPipelineState(pso.GetGraphicsState().Get());
 	renderer.SetSRVHeap(descriptor.GetSrvHeap().Get());
-	renderer.SetRTVHandles({view.GetRtvHandles()[0], view.GetRtvHandles()[1]});
+	renderer.SetRTVHandles({ view.GetRtvHandles()[0], view.GetRtvHandles()[1] });
 	renderer.SetRootSignature(pso.GetRootSignature().Get());
 	renderer.SetViewport(windowScreenSize.GetViewport());
 	renderer.SetScissorRect(windowScreenSize.GetSissorRect());
@@ -249,24 +385,45 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			ImGui::DragFloat3("scale", &transform.scale.x, 0.1f);
 			ImGui::DragFloat3("rotate", &transform.rotate.x, 0.1f);
 			ImGui::DragFloat3("translate", &transform.translate.x, 1.0f);
-			
+
 			Matrix4x4 worldMatrix = MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
 			Matrix4x4 viewMatrix = debugCamera.GetViewMatrix();
 			Matrix4x4 projectionMatrix = MakePerspectiveForMatrix(0.45f, float(kClientWidth) / float(kClientHeight), 0.1f, 100.0f);
 			Matrix4x4 worldViewProjectionMatrix = Multiply(worldMatrix, Multiply(viewMatrix, projectionMatrix));
 			wvpData->WVP = worldViewProjectionMatrix;
 			wvpData->World = worldMatrix;
-
-			gameScene->Update(input.GetKey(), debugCamera);
 			
+			gameScene->Update(input.GetKey(), debugCamera);
+
 			// 開発用UIの処理。実際に開発用のUIを出す場合はここをゲーム固有の処理に置き換える
 			ImGui::ShowDemoWindow();
 
 			// ImGuiの内部コマンドを生成する
 			ImGui::Render();
 
+			Matrix4x4 view = debugCamera.GetViewMatrix();
+			Matrix4x4 proj = MakePerspectiveForMatrix(0.45f, float(kClientWidth) / float(kClientHeight), 0.1f, 100.0f);
+			Matrix4x4 vp = Multiply(view, proj);
+
+			// CBVに書き込む
+			void* mapped = nullptr;
+			cameraBuffer->Map(0, nullptr, &mapped);
+			memcpy(mapped, &vp, sizeof(vp));
+			cameraBuffer->Unmap(0, nullptr);
+
 			UINT backBufferIndex = swapChain.GetList()->GetCurrentBackBufferIndex();
 			renderer.BeginFrame(backBufferIndex);
+
+			ID3D12DescriptorHeap* heaps[] = { descriptor.GetSrvHeap().Get() };
+			command.GetList()->SetDescriptorHeaps(1, heaps);
+			command.GetList()->SetGraphicsRootSignature(pso.GetRootSignature().Get());
+			command.GetList()->SetPipelineState(graphicsPipelineState.Get()); // PSOを設定
+			command.GetList()->SetGraphicsRootConstantBufferView(1, cameraBuffer->GetGPUVirtualAddress());
+
+			// グリッドの描画
+			command.GetList()->IASetVertexBuffers(0, 1, &vbView);
+			command.GetList()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
+			command.GetList()->DrawInstanced(static_cast<UINT>(gridLines.size()), 1, 0, 0);
 
 			renderer.DrawModel(
 				vertexBufferViewSkydome,                // VBV
@@ -304,9 +461,12 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	ImGui::DestroyContext();
 
 	CoUninitialize();
-
-	CloseHandle(command.GetFenceEvent());
 	
+	pixelShaderBlob->Release();
+	vertexShaderBlob->Release();
+	
+	CloseHandle(command.GetFenceEvent());
+
 	pso.Release();
 
 	CloseWindow(hwnd);

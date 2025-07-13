@@ -192,7 +192,7 @@ void GameScene::Draw(
 		for (const auto& block : row) {
 			if (!block.wvpResource)
 				continue;
-
+	
 			renderer.DrawModel(
 				vertexBufferView,
 				ibv,
