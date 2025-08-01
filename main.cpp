@@ -74,7 +74,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	// モデル読み込み
 	ModelData modelData = loadFile.Obj("resources", "block.obj");
-	ModelData modelSkydome = loadFile.Obj("resources", "skydome2.obj");
+	ModelData modelSkydome = loadFile.Obj("resources", "teapot.obj");
 
 	// リソースを作成する
 	Resource resource;
@@ -222,6 +222,81 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	vbView.SizeInBytes = vertexBufferSize;
 	vbView.StrideInBytes = sizeof(Vertex);
 
+	const uint32_t kSubdivision = 16; // 分割数
+
+	Microsoft::WRL::ComPtr<ID3D12Resource> vertexResource = texture.CreateBufferResource(device, sizeof(VertexData) * kSubdivision * kSubdivision * 6);
+
+	// 頂点バッファビューを作成する
+	D3D12_VERTEX_BUFFER_VIEW vertexBufferView{};
+	// リソースの先頭アドレスを使う
+	vertexBufferView.BufferLocation = vertexResource->GetGPUVirtualAddress();
+	// 使用するリソースのサイズは頂点3つ分のサイズ
+	vertexBufferView.SizeInBytes = sizeof(VertexData) * kSubdivision * kSubdivision * 6;
+
+	// 1頂点あたりのサイズ
+	vertexBufferView.StrideInBytes = sizeof(VertexData);
+
+	// 頂点リソースにデータを書き込む
+	VertexData* vertexData = nullptr;
+	// 書き込むためのアドレスを取得
+	vertexResource->Map(0, nullptr, reinterpret_cast<void**>(&vertexData));
+	// 分割数
+
+	const float kLonEvery = 2.0f * float(M_PI) / float(kSubdivision);
+	const float kLatEvery = float(M_PI) / float(kSubdivision);
+
+	// 頂点データの書き込み
+	for (uint32_t latIndex = 0; latIndex < kSubdivision; ++latIndex) {
+		// 各バンドの南端緯度と北端緯度
+		float lat = -0.5f * float(M_PI) + kLatEvery * float(latIndex);
+		float latN = lat + kLatEvery;
+		// sin/cos を一度だけ計算
+		float cosLat = cosf(lat);
+		float sinLat = sinf(lat);
+		float cosLatN = cosf(latN);
+		float sinLatN = sinf(latN);
+
+		for (uint32_t lonIndex = 0; lonIndex < kSubdivision; ++lonIndex) {
+			float lon = kLonEvery * float(lonIndex);
+			float lonN = lon + kLonEvery;
+			float cosLon = cosf(lon);
+			float sinLon = sinf(lon);
+			float cosLonN = cosf(lonN);
+			float sinLonN = sinf(lonN);
+
+			// テクスチャ座標
+			float u = float(lonIndex) / float(kSubdivision);
+			float uN = float(lonIndex + 1) / float(kSubdivision);
+			float v = 1.0f - float(latIndex) / float(kSubdivision);
+			float vN = 1.0f - float(latIndex + 1) / float(kSubdivision);
+
+			// 6頂点分のベースオフセット
+			uint32_t base = (latIndex * kSubdivision + lonIndex) * 6;
+
+			// 頂点位置を構築
+			// BL (Bottom-Left)
+			vertexData[base + 0].position = { cosLat * cosLon,  sinLat,  cosLat * sinLon, 1.0f };
+			vertexData[base + 0].texcoord = { u,  v };
+			vertexData[base + 0].normal = { vertexData[base + 0].position.x, vertexData[base + 0].position.y, vertexData[base + 0].position.z };
+			// TL (Top-Left)
+			vertexData[base + 1].position = { cosLatN * cosLon,  sinLatN, cosLatN * sinLon, 1.0f };
+			vertexData[base + 1].texcoord = { u,  vN };
+			vertexData[base + 1].normal = { vertexData[base + 1].position.x, vertexData[base + 1].position.y, vertexData[base + 1].position.z };
+			// BR (Bottom-Right)
+			vertexData[base + 2].position = { cosLat * cosLonN, sinLat,  cosLat * sinLonN, 1.0f };
+			vertexData[base + 2].texcoord = { uN, v };
+			vertexData[base + 2].normal = { vertexData[base + 2].position.x, vertexData[base + 2].position.y, vertexData[base + 2].position.z };
+			// TR (Top-Right)
+			vertexData[base + 3].position = { cosLatN * cosLonN, sinLatN, cosLatN * sinLonN, 1.0f };
+			vertexData[base + 3].texcoord = { uN, vN };
+			vertexData[base + 3].normal = { vertexData[base + 3].position.x, vertexData[base + 3].position.y, vertexData[base + 3].position.z };
+
+			vertexData[base + 4] = vertexData[base + 2];
+			vertexData[base + 5] = vertexData[base + 1];
+
+		}
+	}
+
 	// 天球リソース
 	Microsoft::WRL::ComPtr <ID3D12Resource> vertexResourceSkydome;
 	D3D12_VERTEX_BUFFER_VIEW vertexBufferViewSkydome = resource.CreateVBV(modelSkydome, texture, device, vertexResourceSkydome);
@@ -244,7 +319,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	windowScreenSize.Initialize(kClientWidth, kClientHeight);
 
 	// Textureを読んで転送する
-	DirectX::ScratchImage mipImages = texture.Load("resources/block.png");
+	DirectX::ScratchImage mipImages = texture.Load("resources/uvChecker.png");
 	const DirectX::TexMetadata metadata = mipImages.GetMetadata();
 	Microsoft::WRL::ComPtr<ID3D12Resource> textureResource = texture.CreateResource(device, metadata);
 	Microsoft::WRL::ComPtr<ID3D12Resource> intermediateResource = texture.UploadData(textureResource, mipImages, device, command.GetList());
@@ -401,29 +476,29 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			// ImGuiの内部コマンドを生成する
 			ImGui::Render();
 
-			Matrix4x4 view = debugCamera.GetViewMatrix();
-			Matrix4x4 proj = MakePerspectiveForMatrix(0.45f, float(kClientWidth) / float(kClientHeight), 0.1f, 100.0f);
-			Matrix4x4 vp = Multiply(view, proj);
+			//Matrix4x4 view = debugCamera.GetViewMatrix();
+			//Matrix4x4 proj = MakePerspectiveForMatrix(0.45f, float(kClientWidth) / float(kClientHeight), 0.1f, 100.0f);
+			//Matrix4x4 vp = Multiply(view, proj);
 
-			// CBVに書き込む
-			void* mapped = nullptr;
-			cameraBuffer->Map(0, nullptr, &mapped);
-			memcpy(mapped, &vp, sizeof(vp));
-			cameraBuffer->Unmap(0, nullptr);
+			//// CBVに書き込む
+			//void* mapped = nullptr;
+			//cameraBuffer->Map(0, nullptr, &mapped);
+			//memcpy(mapped, &vp, sizeof(vp));
+			//cameraBuffer->Unmap(0, nullptr);
 
 			UINT backBufferIndex = swapChain.GetList()->GetCurrentBackBufferIndex();
 			renderer.BeginFrame(backBufferIndex);
 
-			ID3D12DescriptorHeap* heaps[] = { descriptor.GetSrvHeap().Get() };
-			command.GetList()->SetDescriptorHeaps(1, heaps);
-			command.GetList()->SetGraphicsRootSignature(pso.GetRootSignature().Get());
-			command.GetList()->SetPipelineState(graphicsPipelineState.Get()); // PSOを設定
-			command.GetList()->SetGraphicsRootConstantBufferView(1, cameraBuffer->GetGPUVirtualAddress());
+			//ID3D12DescriptorHeap* heaps[] = { descriptor.GetSrvHeap().Get() };
+			//command.GetList()->SetDescriptorHeaps(1, heaps);
+			//command.GetList()->SetGraphicsRootSignature(pso.GetRootSignature().Get());
+			//command.GetList()->SetPipelineState(graphicsPipelineState.Get()); // PSOを設定
+			//command.GetList()->SetGraphicsRootConstantBufferView(1, cameraBuffer->GetGPUVirtualAddress());
 
-			// グリッドの描画
-			command.GetList()->IASetVertexBuffers(0, 1, &vbView);
-			command.GetList()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
-			command.GetList()->DrawInstanced(static_cast<UINT>(gridLines.size()), 1, 0, 0);
+			//// グリッドの描画
+			//command.GetList()->IASetVertexBuffers(0, 1, &vbView);
+			//command.GetList()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
+			//command.GetList()->DrawInstanced(static_cast<UINT>(gridLines.size()), 1, 0, 0);
 
 			renderer.DrawModel(
 				vertexBufferViewSkydome,                // VBV
@@ -434,6 +509,16 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 				directionalLightResource->GetGPUVirtualAddress(),            // Light CBV
 				static_cast<UINT>(modelSkydome.vertices.size())
 			);
+
+			//renderer.DrawModel(
+			//	vertexBufferView,
+			//	nullptr,
+			//	materialResource->GetGPUVirtualAddress(),
+			//	wvpResource->GetGPUVirtualAddress(),
+			//	textureSrvHandleGPU,
+			//	directionalLightResource->GetGPUVirtualAddress(),
+			//	kSubdivision * kSubdivision * 6
+			//);
 
 			gameScene->Draw(
 				debugCamera,

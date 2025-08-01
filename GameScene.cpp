@@ -188,35 +188,35 @@ void GameScene::Draw(
 	D3D12_GPU_VIRTUAL_ADDRESS lightCBV,
 	UINT vertexCount, UINT indexCount)
 {
-	for (const auto& row : blocks_) {
-		for (const auto& block : row) {
-			if (!block.wvpResource)
-				continue;
-	
-			renderer.DrawModel(
-				vertexBufferView,
-				ibv,
-				materialCBV,
-				block.wvpResource->GetGPUVirtualAddress(),  // 個別のWVP
-				textureSrv,
-				lightCBV,
-				vertexCount,
-				indexCount
-			);
-		}
-	}
-
-	// 敵の描画
-	for (Enemy*& enemy : enemies_) {
-		enemy->Draw(renderer, debugCamera);
-	}
-
-	if (player->IsDead()) {
-		// デスパーティクルを描画
-		deathParticles_->Draw(renderer, debugCamera);
-	} else {
-		// プレイヤーの描画
-		player->Draw(renderer, debugCamera);
-	}
+	//for (const auto& row : blocks_) {
+	//	for (const auto& block : row) {
+	//		if (!block.wvpResource)
+	//			continue;
+	//
+	//		renderer.DrawModel(
+	//			vertexBufferView,
+	//			ibv,
+	//			materialCBV,
+	//			block.wvpResource->GetGPUVirtualAddress(),  // 個別のWVP
+	//			textureSrv,
+	//			lightCBV,
+	//			vertexCount,
+	//			indexCount
+	//		);
+	//	}
+	//}
+	//
+	//// 敵の描画
+	//for (Enemy*& enemy : enemies_) {
+	//	enemy->Draw(renderer, debugCamera);
+	//}
+	//
+	//if (player->IsDead()) {
+	//	// デスパーティクルを描画
+	//	deathParticles_->Draw(renderer, debugCamera);
+	//} else {
+	//	// プレイヤーの描画
+	//	player->Draw(renderer, debugCamera);
+	//}
 
 }

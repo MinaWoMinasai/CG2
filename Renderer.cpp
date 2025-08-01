@@ -61,6 +61,29 @@ void Renderer::DrawModel(
     }
 }
 
+void Renderer::DrawLine(const D3D12_VERTEX_BUFFER_VIEW& vbv, const D3D12_INDEX_BUFFER_VIEW* ibv, D3D12_GPU_VIRTUAL_ADDRESS materialCBV, D3D12_GPU_VIRTUAL_ADDRESS wvpCBV, D3D12_GPU_DESCRIPTOR_HANDLE textureSrv, D3D12_GPU_VIRTUAL_ADDRESS lightCBV, UINT vertexCount, UINT indexCount)
+{
+    ID3D12DescriptorHeap* heaps[] = { srvHeap };
+    commandList->SetDescriptorHeaps(1, heaps);
+
+    commandList->SetGraphicsRootSignature(rootSignature);
+    commandList->SetPipelineState(graphicsPipelineState.Get()); // PSOを設定
+    commandList->IASetVertexBuffers(0, 1, &vbv);
+    if (ibv) commandList->IASetIndexBuffer(ibv);
+    commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
+
+    commandList->SetGraphicsRootConstantBufferView(0, materialCBV);
+    commandList->SetGraphicsRootConstantBufferView(1, wvpCBV);
+    commandList->SetGraphicsRootDescriptorTable(2, textureSrv);
+    commandList->SetGraphicsRootConstantBufferView(3, lightCBV);
+
+    if (ibv) {
+        commandList->DrawIndexedInstanced(indexCount, 1, 0, 0, 0);
+    } else {
+        commandList->DrawInstanced(vertexCount, 1, 0, 0);
+    }
+}
+
 void Renderer::DrawImGui() {
     ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
 }

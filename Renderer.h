@@ -32,6 +32,14 @@ public:
         D3D12_GPU_DESCRIPTOR_HANDLE textureSrv,
         D3D12_GPU_VIRTUAL_ADDRESS lightCBV,
         UINT vertexCount, UINT indexCount = 0);
+    void DrawLine(
+        const D3D12_VERTEX_BUFFER_VIEW& vbv,
+        const D3D12_INDEX_BUFFER_VIEW* ibv,
+        D3D12_GPU_VIRTUAL_ADDRESS materialCBV,
+        D3D12_GPU_VIRTUAL_ADDRESS wvpCBV,
+        D3D12_GPU_DESCRIPTOR_HANDLE textureSrv,
+        D3D12_GPU_VIRTUAL_ADDRESS lightCBV,
+        UINT vertexCount, UINT indexCount = 0);
 
     void DrawImGui();
     void EndFrame();
