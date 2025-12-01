@@ -1,12 +1,12 @@
-#include "SpriteCommon.h"
+#include "Object3dCommon.h"
 
-void SpriteCommon::Initialize(DirectXCommon* dxCommon)
+void Object3dCommon::Initialize(DirectXCommon* dxCommon)
 {
 	dxCommon_ = dxCommon;
 
 }
 
-void SpriteCommon::PreDraw()
+void Object3dCommon::PreDraw()
 {
 
 	dxCommon_->GetList()->SetGraphicsRootSignature(dxCommon_->GetPSOObject().root_.GetSignature().Get());

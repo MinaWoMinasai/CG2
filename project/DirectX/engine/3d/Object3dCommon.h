@@ -1,7 +1,7 @@
 #pragma once
 #include "DirectXCommon.h"
 
-class SpriteCommon
+class Object3dCommon
 {
 public:
 
@@ -17,3 +17,4 @@ private:
 
 	DirectXCommon* dxCommon_ = nullptr;
 };
+
